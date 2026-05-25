@@ -1,0 +1,119 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+  pull_request:
+    branches: [main]
+    paths: ['backend/**']
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: lifelink_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run linter
+        working-directory: backend
+        run: npm run lint
+
+      - name: Run tests with coverage
+        working-directory: backend
+        env:
+          NODE_ENV: test
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_NAME: lifelink_test
+          DATABASE_USER: test_user
+          DATABASE_PASSWORD: test_password
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test_jwt_secret_minimum_32_characters_long
+          JWT_REFRESH_SECRET: test_refresh_secret_min_32_chars_long
+          FIREBASE_PROJECT_ID: test-project
+        run: npm run test:cov
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v3
+        with:
+          directory: backend/coverage
+          flags: backend
+
+  build:
+    name: Build Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_NAME: lifelink-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $REGISTRY/$IMAGE_NAME:$IMAGE_TAG ./backend
+          docker tag $REGISTRY/$IMAGE_NAME:$IMAGE_TAG $REGISTRY/$IMAGE_NAME:latest
+          docker push $REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+          docker push $REGISTRY/$IMAGE_NAME:latest
+          echo "IMAGE=$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy to ECS
+        if: success()
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          aws ecs update-service \
+            --cluster lifelink-cluster \
+            --service lifelink-backend \
+            --force-new-deployment \
+            --region ap-south-1

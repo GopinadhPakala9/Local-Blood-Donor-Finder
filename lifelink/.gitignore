@@ -1,0 +1,44 @@
+# ─── Backend ───────────────────────────────────────────────────────────────────
+backend/node_modules/
+backend/dist/
+backend/coverage/
+backend/.env
+backend/*.log
+
+# ─── Mobile ────────────────────────────────────────────────────────────────────
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+
+# Android
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+mobile/android/app/google-services.json
+mobile/android/*.jks
+mobile/android/captures/
+mobile/android/.idea/
+mobile/android/gradle/
+
+# iOS
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/ios/Runner/GeneratedPluginRegistrant.*
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/ios/Runner.xcworkspace/
+
+# ─── Common ────────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+*.iml

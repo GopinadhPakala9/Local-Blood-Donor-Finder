@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LifeLink</string>
+    <string name="default_notification_channel_id">lifelink_alerts</string>
+    <string name="default_notification_channel_name">LifeLink Alerts</string>
+</resources>

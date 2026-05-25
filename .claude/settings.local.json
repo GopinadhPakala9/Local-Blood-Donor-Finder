@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(docker --version)",
+      "Bash(pg_isready)",
+      "Bash(where docker *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Bash(sc query *)",
+      "Bash(PGPASSWORD=\"Gopi@1234\" \"C:/Program Files/PostgreSQL/16/bin/psql.exe\" -U postgres -h 127.0.0.1 -c \"SELECT version\\(\\);\")",
+      "Bash(sed -i 's/127.0.0.1\\\\/32            scram-sha-256/127.0.0.1\\\\/32            trust/' \"C:/Program Files/PostgreSQL/16/data/pg_hba.conf\")",
+      "Bash(sed -i 's/::1\\\\/128                 scram-sha-256/::1\\\\/128                 trust/' \"C:/Program Files/PostgreSQL/16/data/pg_hba.conf\")"
+    ]
+  }
+}

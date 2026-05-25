@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher background — deep red matching LifeLink brand -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/white"/>
+    <!-- You can add a centered logo drawable here -->
+    <!-- <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/launch_image"/>
+    </item> -->
+</layer-list>
