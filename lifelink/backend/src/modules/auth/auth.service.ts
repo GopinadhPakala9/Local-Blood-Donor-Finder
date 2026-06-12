@@ -29,8 +29,9 @@ export class AuthService {
     const key  = identifier.toLowerCase().trim();
     AuthService.otpStore.set(key, { otp, expiresAt: Date.now() + OTP_TTL * 1000 });
 
-    const gmailUser = this.configService.get<string>('GMAIL_USER')?.trim();
-    const gmailPass = this.configService.get<string>('GMAIL_APP_PASSWORD')?.trim();
+    const gmailUser   = this.configService.get<string>('GMAIL_USER')?.trim();
+    const gmailPass   = this.configService.get<string>('GMAIL_APP_PASSWORD')?.trim();
+    const fast2smsKey = this.configService.get<string>('FAST2SMS_API_KEY')?.trim();
 
     let sent = false;
     let channel = '';
@@ -42,8 +43,12 @@ export class AuthService {
         if (sent) channel = 'email';
       }
     } else {
-      // Phone login — send OTP to registered email as fallback (free & works on iPhone)
-      if (gmailUser && gmailPass) {
+      // Phone login — try SMS first, fall back to email
+      if (fast2smsKey) {
+        sent = await this.sendViaSMS(key, otp, fast2smsKey);
+        if (sent) channel = 'SMS';
+      }
+      if (!sent && gmailUser && gmailPass) {
         const user = await this.usersRepo.findOne({ where: { phone: key } });
         if (user?.email) {
           sent = await this.sendViaGmail(user.email, key, otp, gmailUser, gmailPass);
@@ -88,6 +93,34 @@ export class AuthService {
       return true;
     } catch (err: unknown) {
       this.logger.error(`Gmail send failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  // ── Fast2SMS (free Indian SMS OTP) ──────────────────────────────────────────
+  // Sign up at fast2sms.com → Dev API → copy API key → set FAST2SMS_API_KEY env var
+  private async sendViaSMS(phone: string, otp: string, apiKey: string): Promise<boolean> {
+    try {
+      const cleanPhone = phone.replace(/^\+?91/, '');
+      const { data } = await axios.post(
+        'https://www.fast2sms.com/dev/bulkV2',
+        {
+          route: 'q',
+          message: `Your LifeLink OTP is: ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+          language: 'english',
+          flash: 0,
+          numbers: cleanPhone,
+        },
+        { headers: { authorization: apiKey, 'Content-Type': 'application/json' } },
+      );
+      if (data?.return === true) {
+        this.logger.log(`OTP sent via Fast2SMS to ${cleanPhone}`);
+        return true;
+      }
+      this.logger.warn(`Fast2SMS response: ${JSON.stringify(data)}`);
+      return false;
+    } catch (err: unknown) {
+      this.logger.error(`Fast2SMS failed: ${(err as any)?.response?.data?.message || (err as Error).message}`);
       return false;
     }
   }
