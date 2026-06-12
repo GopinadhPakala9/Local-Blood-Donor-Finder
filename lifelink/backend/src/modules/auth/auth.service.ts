@@ -43,8 +43,14 @@ export class AuthService {
         if (sent) channel = 'email';
       }
     } else {
-      // Phone login — try SMS first, fall back to email
-      if (fast2smsKey) {
+      // Phone login — try WhatsApp first, then SMS, then email
+      const waInstance = this.configService.get<string>('ULTRAMSG_INSTANCE_ID')?.trim();
+      const waToken    = this.configService.get<string>('ULTRAMSG_TOKEN')?.trim();
+      if (waInstance && waToken) {
+        sent = await this.sendViaWhatsApp(key, otp, waInstance, waToken);
+        if (sent) channel = 'WhatsApp';
+      }
+      if (!sent && fast2smsKey) {
         sent = await this.sendViaSMS(key, otp, fast2smsKey);
         if (sent) channel = 'SMS';
       }
@@ -100,6 +106,30 @@ export class AuthService {
 
   // ── Fast2SMS (free Indian SMS OTP) ──────────────────────────────────────────
   // Sign up at fast2sms.com → Dev API → copy API key → set FAST2SMS_API_KEY env var
+  // ── UltraMsg WhatsApp OTP (free 500 msgs) ───────────────────────────────────
+  // ultramsg.com → create instance → scan QR → get instanceId + token
+  private async sendViaWhatsApp(phone: string, otp: string, instanceId: string, token: string): Promise<boolean> {
+    try {
+      const to = phone.startsWith('+') ? phone : `+91${phone}`;
+      const message = `🩸 *LifeLink OTP Verification*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share this code with anyone.`;
+      const params = new URLSearchParams({ token, to, body: message });
+      const { data } = await axios.post(
+        `https://api.ultramsg.com/${instanceId}/messages/chat`,
+        params.toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      );
+      if (data?.sent === 'true' || data?.sent === true) {
+        this.logger.log(`OTP sent via WhatsApp to ${to}`);
+        return true;
+      }
+      this.logger.warn(`UltraMsg response: ${JSON.stringify(data)}`);
+      return false;
+    } catch (err: unknown) {
+      this.logger.error(`WhatsApp OTP failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
   // ── TextBelt (truly free, 1 SMS/day, no recharge) ───────────────────────────
   private async sendViaSMS(phone: string, otp: string, apiKey: string): Promise<boolean> {
     try {
