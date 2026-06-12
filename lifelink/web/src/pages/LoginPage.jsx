@@ -120,11 +120,7 @@ export default function LoginPage() {
         return
       }
       const res = await auth.sendOtp(normalise(identifier))
-      if (res.data?.devOtp) {
-        setDevOtp(res.data.devOtp)
-        setOtp(res.data.devOtp.split(''))
-      }
-      const msg = res.data?.message || ''
+      const msg = res.data?.message || res.message || ''
       if (msg.includes('SMS')) setOtpChannel('SMS')
       else if (msg.includes('email')) setOtpChannel('email')
       else setOtpChannel('')

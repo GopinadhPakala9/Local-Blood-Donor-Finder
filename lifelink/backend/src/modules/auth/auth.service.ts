@@ -57,12 +57,13 @@ export class AuthService {
       }
     }
 
+    const isProd = this.configService.get('env') === 'production';
     if (!sent) this.logger.log(`[DEV] OTP for ${key}: ${otp}`);
 
     return {
       message: sent ? `OTP sent to your ${channel}` : 'OTP sent successfully',
       expiresIn: OTP_TTL,
-      ...(!sent && { devOtp: otp }),
+      ...(!sent && !isProd && { devOtp: otp }),
     };
   }
 
