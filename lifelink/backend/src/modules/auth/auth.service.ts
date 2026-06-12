@@ -99,28 +99,26 @@ export class AuthService {
 
   // ── Fast2SMS (free Indian SMS OTP) ──────────────────────────────────────────
   // Sign up at fast2sms.com → Dev API → copy API key → set FAST2SMS_API_KEY env var
+  // ── TextBelt (truly free, 1 SMS/day, no recharge) ───────────────────────────
   private async sendViaSMS(phone: string, otp: string, apiKey: string): Promise<boolean> {
     try {
-      const cleanPhone = phone.replace(/^\+?91/, '');
-      const { data } = await axios.post(
-        'https://www.fast2sms.com/dev/bulkV2',
-        {
-          route: 'q',
-          message: `Your LifeLink OTP is: ${otp}. Valid for 5 minutes. Do not share with anyone.`,
-          language: 'english',
-          flash: 0,
-          numbers: cleanPhone,
-        },
-        { headers: { authorization: apiKey, 'Content-Type': 'application/json' } },
-      );
-      if (data?.return === true) {
-        this.logger.log(`OTP sent via Fast2SMS to ${cleanPhone}`);
+      const cleanPhone = phone.startsWith('+') ? phone : `+91${phone}`;
+      const params = new URLSearchParams({
+        phone: cleanPhone,
+        message: `Your LifeLink OTP is: ${otp}. Valid for 5 minutes.`,
+        key: apiKey === 'textbelt' ? 'textbelt' : apiKey,
+      });
+      const { data } = await axios.post('https://textbelt.com/text', params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+      if (data?.success) {
+        this.logger.log(`OTP sent via TextBelt to ${cleanPhone}`);
         return true;
       }
-      this.logger.warn(`Fast2SMS response: ${JSON.stringify(data)}`);
+      this.logger.warn(`TextBelt response: ${JSON.stringify(data)}`);
       return false;
     } catch (err: unknown) {
-      this.logger.error(`Fast2SMS failed: ${(err as any)?.response?.data?.message || (err as Error).message}`);
+      this.logger.error(`SMS failed: ${(err as any)?.response?.data || (err as Error).message}`);
       return false;
     }
   }
