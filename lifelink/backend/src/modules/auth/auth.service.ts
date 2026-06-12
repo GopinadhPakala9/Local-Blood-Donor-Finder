@@ -29,9 +29,8 @@ export class AuthService {
     const key  = identifier.toLowerCase().trim();
     AuthService.otpStore.set(key, { otp, expiresAt: Date.now() + OTP_TTL * 1000 });
 
-    const gmailUser   = this.configService.get<string>('GMAIL_USER')?.trim();
-    const gmailPass   = this.configService.get<string>('GMAIL_APP_PASSWORD')?.trim();
-    const fast2smsKey = this.configService.get<string>('FAST2SMS_API_KEY')?.trim();
+    const gmailUser = this.configService.get<string>('GMAIL_USER')?.trim();
+    const gmailPass = this.configService.get<string>('GMAIL_APP_PASSWORD')?.trim();
 
     let sent = false;
     let channel = '';
@@ -43,15 +42,10 @@ export class AuthService {
         if (sent) channel = 'email';
       }
     } else {
-      // Phone login — try WhatsApp first, then SMS, then email
-      const waInstance = this.configService.get<string>('ULTRAMSG_INSTANCE_ID')?.trim();
-      const waToken    = this.configService.get<string>('ULTRAMSG_TOKEN')?.trim();
-      if (waInstance && waToken) {
-        sent = await this.sendViaWhatsApp(key, otp, waInstance, waToken);
-        if (sent) channel = 'WhatsApp';
-      }
-      if (!sent && fast2smsKey) {
-        sent = await this.sendViaSMS(key, otp, fast2smsKey);
+      // Phone login — try 2Factor SMS, fall back to email
+      const twofactorKey = this.configService.get<string>('TWOFACTOR_API_KEY')?.trim();
+      if (twofactorKey) {
+        sent = await this.sendVia2Factor(key, otp, twofactorKey);
         if (sent) channel = 'SMS';
       }
       if (!sent && gmailUser && gmailPass) {
@@ -106,50 +100,22 @@ export class AuthService {
 
   // ── Fast2SMS (free Indian SMS OTP) ──────────────────────────────────────────
   // Sign up at fast2sms.com → Dev API → copy API key → set FAST2SMS_API_KEY env var
-  // ── UltraMsg WhatsApp OTP (free 500 msgs) ───────────────────────────────────
-  // ultramsg.com → create instance → scan QR → get instanceId + token
-  private async sendViaWhatsApp(phone: string, otp: string, instanceId: string, token: string): Promise<boolean> {
+  // ── 2Factor.in SMS OTP (Indian, 10 free OTPs) ───────────────────────────────
+  // 2factor.in → sign up → copy API key → set TWOFACTOR_API_KEY env var
+  private async sendVia2Factor(phone: string, otp: string, apiKey: string): Promise<boolean> {
     try {
-      const to = phone.startsWith('+') ? phone : `+91${phone}`;
-      const message = `🩸 *LifeLink OTP Verification*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share this code with anyone.`;
-      const params = new URLSearchParams({ token, to, body: message });
-      const { data } = await axios.post(
-        `https://api.ultramsg.com/${instanceId}/messages/chat`,
-        params.toString(),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      const digits = phone.replace(/^\+?91/, '').replace(/\D/g, '');
+      const { data } = await axios.get(
+        `https://2factor.in/API/V1/${apiKey}/SMS/${digits}/${otp}/OTP1`,
       );
-      if (data?.sent === 'true' || data?.sent === true) {
-        this.logger.log(`OTP sent via WhatsApp to ${to}`);
+      if (data?.Status === 'Success') {
+        this.logger.log(`OTP sent via 2Factor to ${digits}`);
         return true;
       }
-      this.logger.warn(`UltraMsg response: ${JSON.stringify(data)}`);
+      this.logger.warn(`2Factor response: ${JSON.stringify(data)}`);
       return false;
     } catch (err: unknown) {
-      this.logger.error(`WhatsApp OTP failed: ${(err as Error).message}`);
-      return false;
-    }
-  }
-
-  // ── TextBelt (truly free, 1 SMS/day, no recharge) ───────────────────────────
-  private async sendViaSMS(phone: string, otp: string, apiKey: string): Promise<boolean> {
-    try {
-      const cleanPhone = phone.startsWith('+') ? phone : `+91${phone}`;
-      const params = new URLSearchParams({
-        phone: cleanPhone,
-        message: `Your LifeLink OTP is: ${otp}. Valid for 5 minutes.`,
-        key: apiKey === 'textbelt' ? 'textbelt' : apiKey,
-      });
-      const { data } = await axios.post('https://textbelt.com/text', params.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      if (data?.success) {
-        this.logger.log(`OTP sent via TextBelt to ${cleanPhone}`);
-        return true;
-      }
-      this.logger.warn(`TextBelt response: ${JSON.stringify(data)}`);
-      return false;
-    } catch (err: unknown) {
-      this.logger.error(`SMS failed: ${(err as any)?.response?.data || (err as Error).message}`);
+      this.logger.error(`2Factor failed: ${(err as Error).message}`);
       return false;
     }
   }
