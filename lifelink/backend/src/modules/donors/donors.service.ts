@@ -9,6 +9,11 @@ import { SearchDonorDto } from './dto/search-donor.dto';
 export class DonorsService {
   constructor(@InjectRepository(User) private usersRepo: Repository<User>) {}
 
+  async setAvailability(userId: string, is_available: boolean): Promise<{ is_available: boolean }> {
+    await this.usersRepo.update(userId, { is_available });
+    return { is_available };
+  }
+
   async register(userId: string, dto: RegisterDonorDto): Promise<User> {
     await this.usersRepo.update(userId, {
       ...dto,
@@ -22,57 +27,84 @@ export class DonorsService {
     const { blood_group, radius = 10, latitude, longitude, city, page = 1, limit = 20 } = query;
     const offset = (page - 1) * limit;
 
-    let sql = `
+    // Build shared WHERE conditions and params
+    const conditions: string[] = [`u.role = 'donor'`, `u.is_available = true`];
+    const baseParams: any[] = [];
+    let idx = 1;
+
+    if (blood_group) {
+      conditions.push(`u.blood_group = $${idx++}`);
+      baseParams.push(blood_group);
+    }
+    if (city) {
+      conditions.push(`LOWER(u.city) = LOWER($${idx++})`);
+      baseParams.push(city);
+    }
+
+    const hasLocation = latitude != null && longitude != null;
+    let distanceExpr = 'NULL';
+    let radiusCondition = '';
+    let latIdx: number, lngIdx: number;
+
+    if (hasLocation) {
+      latIdx = idx++;
+      lngIdx = idx++;
+      distanceExpr = `ROUND((6371 * acos(LEAST(1.0,
+        cos(radians($${latIdx})) * cos(radians(u.latitude)) *
+        cos(radians(u.longitude) - radians($${lngIdx})) +
+        sin(radians($${latIdx})) * sin(radians(u.latitude))
+      )))::numeric, 1)`;
+      if (radius) {
+        const radIdx = idx++;
+        radiusCondition = `AND (6371 * acos(LEAST(1.0,
+          cos(radians($${latIdx})) * cos(radians(u.latitude)) *
+          cos(radians(u.longitude) - radians($${lngIdx})) +
+          sin(radians($${latIdx})) * sin(radians(u.latitude))
+        ))) <= $${radIdx}`;
+        baseParams.push(latitude, longitude, radius);
+      } else {
+        baseParams.push(latitude, longitude);
+      }
+    }
+
+    const whereClause = conditions.join(' AND ');
+    const donorJoin = `LEFT JOIN (
+        SELECT donor_id, COUNT(*) as donation_count, MAX(donated_on) as last_donation_date
+        FROM donations GROUP BY donor_id
+      ) d ON d.donor_id = u.id`;
+
+    // Count query uses the same base params
+    const countSql = `
+      SELECT COUNT(*) FROM users u
+      ${donorJoin}
+      WHERE ${whereClause} ${radiusCondition}
+    `;
+    const countResult = await this.usersRepo.query(countSql, baseParams);
+    const total = parseInt(countResult[0]?.count || '0');
+
+    // Data query adds LIMIT/OFFSET at the end
+    const limitIdx = idx++;
+    const offsetIdx = idx;
+    const dataParams = [...baseParams, limit, offset];
+
+    const dataSql = `
       SELECT
-        u.id, u.name, u.blood_group, u.city, u.state,
+        u.id, u.name, u.phone, u.blood_group, u.city, u.state,
         u.is_available, u.is_verified,
         COALESCE(d.donation_count, 0) as total_donations,
         d.last_donation_date,
-        CASE
-          WHEN $3::float IS NOT NULL AND $4::float IS NOT NULL THEN
-            ROUND((6371 * acos(
-              cos(radians($3)) * cos(radians(u.latitude)) *
-              cos(radians(u.longitude) - radians($4)) +
-              sin(radians($3)) * sin(radians(u.latitude))
-            ))::numeric, 1)
-          ELSE NULL
-        END as distance_km
+        ${distanceExpr} as distance_km
       FROM users u
-      LEFT JOIN (
-        SELECT donor_id, COUNT(*) as donation_count, MAX(donated_on) as last_donation_date
-        FROM donations GROUP BY donor_id
-      ) d ON d.donor_id = u.id
-      WHERE u.role = 'donor' AND u.is_available = true
+      ${donorJoin}
+      WHERE ${whereClause} ${radiusCondition}
+      ORDER BY distance_km ASC NULLS LAST, u.created_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
-    const params: any[] = [limit, offset, latitude || null, longitude || null];
-    let paramIdx = 5;
 
-    if (blood_group) {
-      sql += ` AND u.blood_group = $${paramIdx++}`;
-      params.push(blood_group);
-    }
-    if (city) {
-      sql += ` AND LOWER(u.city) = LOWER($${paramIdx++})`;
-      params.push(city);
-    }
-    if (latitude && longitude && radius) {
-      sql += ` AND (6371 * acos(
-        cos(radians($3)) * cos(radians(u.latitude)) *
-        cos(radians(u.longitude) - radians($4)) +
-        sin(radians($3)) * sin(radians(u.latitude))
-      )) <= $${paramIdx++}`;
-      params.push(radius);
-    }
-
-    sql += ` ORDER BY distance_km ASC NULLS LAST, u.created_at DESC LIMIT $1 OFFSET $2`;
-
-    const donors = await this.usersRepo.query(sql, params);
-    const countSql = sql.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM').split('ORDER BY')[0];
-    const countResult = await this.usersRepo.query(countSql, params.slice(2));
-    const total = parseInt(countResult[0]?.count || '0');
+    const donors = await this.usersRepo.query(dataSql, dataParams);
 
     return {
-      donors: donors.map((d) => ({
+      donors: donors.map((d: any) => ({
         ...d,
         distance: d.distance_km != null ? `${d.distance_km} km` : null,
         badge: this.getBadge(parseInt(d.total_donations || '0')),

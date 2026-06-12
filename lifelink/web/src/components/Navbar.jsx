@@ -15,6 +15,15 @@ export default function Navbar() {
 
   const logout = () => { localStorage.clear(); nav('/login') }
 
+  const getInitial = () => {
+    if (user.name?.trim())  return user.name.trim()[0].toUpperCase()
+    if (user.email?.trim()) return user.email.trim()[0].toUpperCase()
+    if (user.phone?.trim()) return user.phone.replace(/^\+91/, '')[0] || 'U'
+    return 'U'
+  }
+
+  const getDisplayName = () => user.name?.trim() || user.email?.trim() || user.phone || 'User'
+
   return (
     <nav style={S.nav}>
       <div style={S.inner}>
@@ -32,20 +41,21 @@ export default function Navbar() {
         </div>
 
         <div style={S.right}>
-          <Link to="/requests/new" style={S.ctaBtn}>+ New Request</Link>
           <div style={{position:'relative'}}>
             <button style={S.avatar} onClick={() => setOpen(o => !o)}>
-              {user.name ? user.name[0].toUpperCase() : '?'}
+              {getInitial()}
             </button>
             {open && (
               <div style={S.dropdown}>
                 <div style={S.ddUser}>
-                  <strong>{user.name || 'User'}</strong>
-                  <span style={{fontSize:12, color:'var(--text-3)'}}>{user.phone}</span>
+                  <strong>{getDisplayName()}</strong>
+                  <span style={{fontSize:12, color:'var(--text-3)'}}>{user.phone || user.email}</span>
                 </div>
                 <hr style={{border:'none', borderTop:'1px solid var(--border)', margin:'4px 0'}} />
                 <button style={S.ddItem} onClick={() => { nav('/'); setOpen(false) }}>🏠 Dashboard</button>
-                <button style={S.ddItem} onClick={() => { nav('/requests/new'); setOpen(false) }}>🩸 Create Request</button>
+                <button style={S.ddItem} onClick={() => { nav('/profile'); setOpen(false) }}>👤 Edit Profile</button>
+                <button style={S.ddItem} onClick={() => { nav('/requests/new');  setOpen(false) }}>🩸 Create Request</button>
+                <button style={S.ddItem} onClick={() => { nav('/my-donations'); setOpen(false) }}>💉 My Donations</button>
                 <hr style={{border:'none', borderTop:'1px solid var(--border)', margin:'4px 0'}} />
                 <button style={{...S.ddItem, color:'var(--red)'}} onClick={logout}>🚪 Sign Out</button>
               </div>

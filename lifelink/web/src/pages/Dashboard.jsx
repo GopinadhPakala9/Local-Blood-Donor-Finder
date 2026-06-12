@@ -1,14 +1,60 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { requests, donors } from '../api'
+import { requests, donors, users } from '../api'
+
+function AvailabilityToggle({ initial, onChange }) {
+  const [active, setActive] = useState(initial)
+  const [saving, setSaving] = useState(false)
+
+  const toggle = async () => {
+    setSaving(true)
+    try {
+      const next = !active
+      await donors.setAvailability(next)
+      setActive(next)
+      onChange?.(next)
+      // update localStorage so navbar stays in sync
+      try {
+        const u = JSON.parse(localStorage.getItem('user') || '{}')
+        localStorage.setItem('user', JSON.stringify({ ...u, is_available: next }))
+      } catch {}
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div style={T.wrap}>
+      <span style={T.label}>Donor Status</span>
+      <button onClick={toggle} disabled={saving} style={{...T.pill, background: active ? '#16A34A' : '#6B7280'}}>
+        <span style={{...T.dot, transform: active ? 'translateX(20px)' : 'translateX(2px)'}} />
+      </button>
+      <span style={{...T.status, color: active ? '#86EFAC' : 'rgba(255,255,255,0.6)'}}>
+        {saving ? 'Saving…' : active ? '● Active' : '○ Inactive'}
+      </span>
+    </div>
+  )
+}
+
+const T = {
+  wrap:   { display:'flex', alignItems:'center', gap:10 },
+  label:  { fontSize:13, color:'rgba(255,255,255,0.8)', fontWeight:500 },
+  pill:   { width:44, height:24, borderRadius:12, border:'none', cursor:'pointer', position:'relative', transition:'background .25s', flexShrink:0 },
+  dot:    { position:'absolute', top:2, width:20, height:20, borderRadius:'50%', background:'white', transition:'transform .25s', display:'block' },
+  status: { fontSize:13, fontWeight:600, minWidth:72 },
+}
 
 const BG_COLORS = { Critical:'#FEE2E2', Urgent:'#FEF3C7', Normal:'#F0FDF4' }
 const TX_COLORS = { Critical:'#991B1B', Urgent:'#92400E', Normal:'#166534' }
 const BG_MAP    = { 'A+':'#EBF5FB','A-':'#D6EAF8','B+':'#FDEBD0','B-':'#FAD7A0','O+':'#FDEDEC','O-':'#FADBD8','AB+':'#E8DAEF','AB-':'#D7BDE2' }
 
-function StatCard({ icon, label, value, sub, color }) {
+function StatCard({ icon, label, value, sub, color, to }) {
+  const nav = useNavigate()
   return (
-    <div style={{...S.statCard, borderTop:`4px solid ${color}`}}>
+    <div
+      style={{...S.statCard, borderTop:`4px solid ${color}`, ...(to && {cursor:'pointer'})}}
+      onClick={to ? () => nav(to) : undefined}
+      onMouseEnter={to ? e => { e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'; e.currentTarget.style.transform='translateY(-2px)' } : undefined}
+      onMouseLeave={to ? e => { e.currentTarget.style.boxShadow='var(--shadow-sm)'; e.currentTarget.style.transform='translateY(0)' } : undefined}
+    >
       <div style={{...S.statIcon, background: color+'22', color}}>{icon}</div>
       <div>
         <div style={S.statVal}>{value}</div>
@@ -27,19 +73,27 @@ function UrgencyBadge({ u }) {
 export default function Dashboard() {
   const nav = useNavigate()
   const user = (() => { try { return JSON.parse(localStorage.getItem('user')||'{}') } catch { return {} }})()
-  const [reqs, setReqs]   = useState([])
-  const [dons, setDons]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [reqs, setReqs]         = useState([])
+  const [dons, setDons]         = useState([])
+  const [stats, setStats]       = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [isAvailable, setIsAvailable] = useState(user.is_available !== false)
   const hour = new Date().getHours()
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
+  const refreshDonors = () =>
+    donors.search({ limit:4, page:1 }).catch(() => ({}))
+      .then(d => setDons(d?.data?.donors || []))
+
   useEffect(() => {
     Promise.all([
-      requests.list({ limit:5, status:'Open' }).catch(() => ({ data:{ requests:[] } })),
-      donors.search({ limit:4, page:1 }).catch(() => ({ data:{ donors:[] } }))
-    ]).then(([r, d]) => {
+      requests.list({ limit:5, status:'Open' }).catch(() => ({})),
+      donors.search({ limit:4, page:1 }).catch(() => ({})),
+      users.dashboardStats().catch(() => ({})),
+    ]).then(([r, d, s]) => {
       setReqs(r?.data?.requests || [])
-      setDons(d?.data?.donors || [])
+      setDons(d?.data?.donors   || [])
+      setStats(s?.data || s || null)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -58,10 +112,11 @@ export default function Dashboard() {
                 : 'Welcome to LifeLink. Help save lives by donating blood.'}
             </p>
           </div>
-          <div style={S.heroActions}>
-            <button style={S.heroBtnP} onClick={() => nav('/donors')}>🔍 Find Donors</button>
-            <button style={S.heroBtnS} onClick={() => nav('/requests/new')}>🩸 Request Blood</button>
-          </div>
+          <AvailabilityToggle initial={isAvailable} onChange={(next) => {
+            setIsAvailable(next)
+            setStats(prev => prev ? { ...prev, activeDonors: Math.max(0, (prev.activeDonors || 0) + (next ? 1 : -1)) } : prev)
+            refreshDonors()
+          }} />
         </div>
         <div style={S.heroIll}>
           <svg viewBox="0 0 200 200" width="180" height="180">
@@ -78,10 +133,10 @@ export default function Dashboard() {
       <div style={S.content}>
         {/* Stats */}
         <div style={S.statsGrid}>
-          <StatCard icon="👥" label="Active Donors" value={loading ? '…' : '1,240'} sub="In your region" color="#3B82F6" />
-          <StatCard icon="🩸" label="Open Requests" value={loading ? '…' : reqs.length || '45'} sub={urgentCount ? `${urgentCount} urgent` : 'All clear'} color="#C0392B" />
-          <StatCard icon="🏥" label="Hospitals" value="38" sub="Verified partners" color="#8B5CF6" />
-          <StatCard icon="🏆" label="Lives Saved" value="524" sub="This month" color="#10B981" />
+          <StatCard icon="👥" label="Active Donors"  value={loading ? '…' : (stats?.activeDonors ?? '—')}        sub={isAvailable ? 'Including you ✓' : 'Set yourself Active to appear'} color="#3B82F6" to="/donors" />
+          <StatCard icon="🩸" label="Open Requests"  value={loading ? '…' : (stats?.openRequests ?? reqs.length)} sub={urgentCount ? `${urgentCount} urgent` : 'All clear'}             color="#C0392B" to="/requests" />
+          <StatCard icon="🏥" label="Hospitals"       value={loading ? '…' : (stats?.totalHospitals ?? '—')}       sub="Registered partners"                                              color="#8B5CF6" />
+          <StatCard icon="🏆" label="Lives Saved"     value={loading ? '…' : (stats?.livesSavedThisMonth ?? '—')}  sub="Donations this month"                                             color="#10B981" to="/profile" />
         </div>
 
         <div style={S.cols}>
@@ -141,10 +196,9 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <div style={S.quickGrid}>
           {[
-            { icon:'🩸', label:'Request Blood', sub:'Create an emergency request', color:'#C0392B', to:'/requests/new' },
             { icon:'👤', label:'Become a Donor', sub:'Register to help save lives', color:'#3B82F6', to:'/donors' },
             { icon:'🏥', label:'Find Hospitals', sub:'Locate nearby blood banks', color:'#8B5CF6', to:'/donors' },
-            { icon:'📊', label:'My Donations', sub:'Track your donation history', color:'#10B981', to:'/' },
+            { icon:'📊', label:'My Donations', sub:'Track your donation history', color:'#10B981', to:'/my-donations' },
           ].map(q => (
             <button key={q.label} style={{...S.qCard, borderLeft:`4px solid ${q.color}`}} onClick={() => nav(q.to)}>
               <span style={{fontSize:28}}>{q.icon}</span>
@@ -184,7 +238,7 @@ const S = {
   heroIll: { opacity:.9 },
   content: { display:'flex', flexDirection:'column', gap:24 },
   statsGrid: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 },
-  statCard: { background:'white', borderRadius:12, padding:'20px', display:'flex', gap:16, alignItems:'center', boxShadow:'var(--shadow-sm)' },
+  statCard: { background:'white', borderRadius:12, padding:'20px', display:'flex', gap:16, alignItems:'center', boxShadow:'var(--shadow-sm)', transition:'box-shadow .2s, transform .15s' },
   statIcon: { width:44, height:44, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 },
   statVal: { fontSize:24, fontWeight:800, color:'var(--text)' },
   statLabel: { fontSize:13, color:'var(--text-2)', fontWeight:500 },
@@ -202,6 +256,6 @@ const S = {
   donorAvatar: { width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,var(--red-light),var(--red))', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:14, flexShrink:0 },
   donorName: { fontSize:14, fontWeight:600, color:'var(--text)' },
   dim: { color:'var(--text-3)', fontSize:14, padding:'16px 0' },
-  quickGrid: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 },
+  quickGrid: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 },
   qCard: { display:'flex', alignItems:'center', gap:14, padding:'16px', background:'white', border:'1px solid var(--border)', borderRadius:12, cursor:'pointer', textAlign:'left', transition:'box-shadow .2s, transform .15s', boxShadow:'var(--shadow-sm)' },
 }

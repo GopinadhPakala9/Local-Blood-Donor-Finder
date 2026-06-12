@@ -3,10 +3,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import {
-  IsString, IsOptional, IsEnum, IsNumber, IsBoolean, Min, Max,
+  IsString, IsOptional, IsEnum, IsNumber, IsBoolean, IsDateString, Min, Max,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { AdminService } from '../admin/admin.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User, BloodGroup, Gender } from '../../database/entities/user.entity';
@@ -27,6 +28,10 @@ class UpdateProfileDto {
   @ApiProperty({ required: false, enum: Gender })
   @IsOptional() @IsEnum(Gender)
   gender?: Gender;
+
+  @ApiProperty({ required: false, example: '1995-06-15' })
+  @IsOptional() @IsDateString()
+  dob?: string;
 
   @ApiProperty({ required: false })
   @IsOptional() @IsNumber() @Min(18) @Max(200)
@@ -66,7 +71,10 @@ class UpdateAvailabilityDto {
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly adminService: AdminService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -77,7 +85,8 @@ export class UsersController {
   @Put('me')
   @ApiOperation({ summary: 'Update current user profile' })
   updateMe(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
-    return this.usersService.update(user.id, dto);
+    const { dob, ...rest } = dto;
+    return this.usersService.update(user.id, { ...rest, ...(dob && { dob: new Date(dob) }) });
   }
 
   @Put('me/fcm-token')
@@ -99,5 +108,11 @@ export class UsersController {
   @ApiOperation({ summary: 'Get donation statistics for current user' })
   getStats(@CurrentUser() user: User) {
     return this.usersService.getUserStats(user.id);
+  }
+
+  @Get('dashboard/stats')
+  @ApiOperation({ summary: 'Get real-time dashboard stats' })
+  getDashboardStats() {
+    return this.adminService.getDashboardStats();
   }
 }

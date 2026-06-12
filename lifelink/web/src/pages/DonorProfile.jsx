@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { donors } from '../api'
 
+const fmtBG = bg => bg ? bg.replace('+', '+ve').replace('-', '-ve') : bg
 const BG_MAP = {'A+':'#EBF5FB','A-':'#D6EAF8','B+':'#FDEBD0','B-':'#FAD7A0','O+':'#FDEDEC','O-':'#FADBD8','AB+':'#E8DAEF','AB-':'#D7BDE2'}
 const BG_TEXT= {'A+':'#1A5276','A-':'#154360','B+':'#784212','B-':'#6E2F1A','O+':'#7B241C','O-':'#641E16','AB+':'#4A235A','AB-':'#3B1A59'}
 
@@ -31,6 +32,7 @@ export default function DonorProfile() {
           <div style={{flex:1}}>
             <h1 style={S.name}>{donor.name || 'Anonymous'}</h1>
             <p style={S.loc}>📍 {donor.city}{donor.state ? `, ${donor.state}` : ''}{donor.distance ? ` · ${donor.distance}` : ''}</p>
+            {donor.phone && <p style={{...S.loc, marginBottom:10}}>📞 {donor.phone}</p>}
             <div style={S.badges}>
               {donor.is_available && <span style={S.availBadge}>● Available to donate</span>}
               {donor.is_verified   && <span style={S.vBadge}>✓ Verified Donor</span>}
@@ -54,7 +56,7 @@ export default function DonorProfile() {
         {donor.is_available && (
           <div style={S.actions}>
             <a href={`tel:${donor.phone || ''}`} style={S.callBtn}>📞 Call Donor</a>
-            <a href={`https://wa.me/${donor.phone?.replace(/\D/g,'')}?text=Hi, I need ${donor.blood_group} blood. Are you available to donate?`} target="_blank" rel="noreferrer" style={S.waBtn}>💬 WhatsApp</a>
+            <a href={`https://wa.me/${donor.phone?.replace(/\D/g,'')}?text=${encodeURIComponent(`Hi, I need ${fmtBG(donor.blood_group)} blood. Are you available to donate?`)}`} target="_blank" rel="noreferrer" style={S.waBtn}>💬 WhatsApp</a>
           </div>
         )}
       </div>

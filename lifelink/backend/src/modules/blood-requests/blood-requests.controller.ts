@@ -8,7 +8,8 @@ import { CreateBloodRequestDto } from './dto/create-blood-request.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../../database/entities/user.entity';
-import { IsOptional, IsEnum, IsString } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsInt, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { BloodGroup } from '../../database/entities/user.entity';
 import { Urgency, RequestStatus } from '../../database/entities/blood-request.entity';
@@ -30,7 +31,12 @@ class FilterRequestsDto {
   @IsOptional() @IsEnum(RequestStatus)
   status?: string;
 
+  @ApiProperty({ required: false, default: 1 })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   page?: number;
+
+  @ApiProperty({ required: false, default: 20 })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100)
   limit?: number;
 }
 
@@ -45,6 +51,14 @@ export class BloodRequestsController {
   @ApiOperation({ summary: 'Create an emergency blood request' })
   create(@CurrentUser() user: User, @Body() dto: CreateBloodRequestDto) {
     return this.service.create(user.id, dto);
+  }
+
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user\'s blood requests' })
+  findMine(@CurrentUser() user: User, @Query() filters: FilterRequestsDto) {
+    return this.service.findAll({ ...filters, requester_id: user.id });
   }
 
   @Get()
@@ -91,5 +105,14 @@ export class BloodRequestsController {
   @ApiOperation({ summary: 'Cancel a blood request' })
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     return this.service.cancel(id, user.id, user.role);
+  }
+
+  @Post(':id/fulfill')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark blood request as fulfilled (by requester)' })
+  fulfill(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.service.fulfill(id, user.id, user.role);
   }
 }

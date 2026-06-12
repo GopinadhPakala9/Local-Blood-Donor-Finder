@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Donation } from '../../database/entities/donation.entity';
 import { Reward, RewardAction } from '../../database/entities/reward.entity';
+import { BloodRequest, RequestStatus } from '../../database/entities/blood-request.entity';
 import { IsDateString, IsOptional, IsInt, Min, Max, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -25,6 +26,7 @@ export class DonationsService {
   constructor(
     @InjectRepository(Donation) private donationsRepo: Repository<Donation>,
     @InjectRepository(Reward) private rewardsRepo: Repository<Reward>,
+    @InjectRepository(BloodRequest) private requestsRepo: Repository<BloodRequest>,
   ) {}
 
   async logDonation(donorId: string, dto: LogDonationDto): Promise<Donation> {
@@ -35,6 +37,11 @@ export class DonationsService {
       blood_request_id: dto.blood_request_id,
     });
     const saved = await this.donationsRepo.save(donation);
+
+    // Auto-fulfill the linked blood request
+    if (dto.blood_request_id) {
+      await this.requestsRepo.update(dto.blood_request_id, { status: RequestStatus.FULFILLED });
+    }
 
     await this.rewardsRepo.save(this.rewardsRepo.create({
       user_id: donorId,

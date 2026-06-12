@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { requests } from '../api'
+import { requests, donations } from '../api'
 
+const fmtBG = bg => bg ? bg.replace('+', '+ve').replace('-', '-ve') : bg
 const URGENCY_COLOR = { Critical:['#FEE2E2','#991B1B'], Urgent:['#FEF3C7','#92400E'], Normal:['#F0FDF4','#166534'] }
 const URGENCY_ICON  = { Critical:'🚨', Urgent:'⚠️', Normal:'✅' }
 const BG_MAP = {'A+':'#EBF5FB','A-':'#D6EAF8','B+':'#FDEBD0','B-':'#FAD7A0','O+':'#FDEDEC','O-':'#FADBD8','AB+':'#E8DAEF','AB-':'#D7BDE2'}
@@ -41,6 +42,27 @@ export default function BloodRequests() {
   const upd = (k, v) => { const f = {...filters, [k]:v, page:1}; setFilters(f); load(f) }
 
   const user = (() => { try { return JSON.parse(localStorage.getItem('user')||'{}') } catch { return {} }})()
+  const [actioning, setActioning] = useState(null)
+
+  const handleDonate = async (r) => {
+    if (!window.confirm(`Confirm you donated ${fmtBG(r.blood_group)} blood for ${r.patient_name}?`)) return
+    setActioning(r.id)
+    try {
+      await donations.log({ donated_on: new Date().toISOString().slice(0,10), units: r.units_required || 1, blood_request_id: r.id })
+      load()
+    } catch (e) { alert(e?.message || 'Failed to record donation') }
+    finally { setActioning(null) }
+  }
+
+  const handleFulfill = async (r) => {
+    if (!window.confirm(`Mark this request for ${r.patient_name} as fulfilled?`)) return
+    setActioning(r.id)
+    try {
+      await requests.fulfill(r.id)
+      load()
+    } catch (e) { alert(e?.message || 'Failed to mark fulfilled') }
+    finally { setActioning(null) }
+  }
 
   return (
     <div style={S.page}>
@@ -120,13 +142,18 @@ export default function BloodRequests() {
                   </div>
                 </div>
                 <div style={S.cardRight}>
-                  {r.requester_id === user.id && (
-                    <span style={{fontSize:12, color:'var(--text-3)', background:'#F3F4F6', padding:'3px 10px', borderRadius:20}}>My Request</span>
-                  )}
+                  {r.requester_id === user.id
+                    ? <button style={S.fulfillBtn} disabled={actioning===r.id} onClick={() => handleFulfill(r)}>
+                        {actioning===r.id ? '…' : '✅ Mark Fulfilled'}
+                      </button>
+                    : <button style={S.donateBtn} disabled={actioning===r.id} onClick={() => handleDonate(r)}>
+                        {actioning===r.id ? '…' : '💉 I Donated'}
+                      </button>
+                  }
                   <button style={S.contactBtn} onClick={() => window.location.href = `tel:${r.contact_number}`}>
                     📞 {r.contact_number}
                   </button>
-                  <button style={S.waBtn} onClick={() => window.open(`https://wa.me/${r.contact_number?.replace(/\D/g,'')}?text=Hi, I can donate ${r.blood_group} blood for ${r.patient_name}`)}>
+                  <button style={S.waBtn} onClick={() => window.open(`https://wa.me/${r.contact_number?.replace(/\D/g,'')}?text=${encodeURIComponent(`Hi, I can donate ${fmtBG(r.blood_group)} blood for ${r.patient_name}`)}`)}>
                     💬 WhatsApp
                   </button>
                 </div>
@@ -164,6 +191,8 @@ const S = {
   chips: { display:'flex', gap:6, flexWrap:'wrap', marginTop:8 },
   chip: { padding:'3px 10px', background:'#F3F4F6', borderRadius:20, fontSize:12, color:'var(--text-2)', fontWeight:500 },
   cardRight: { display:'flex', flexDirection:'column', gap:8, flexShrink:0 },
+  donateBtn:  { padding:'8px 16px', background:'#EDE9FE', color:'#6D28D9', border:'2px solid #DDD6FE', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
+  fulfillBtn: { padding:'8px 16px', background:'#DCFCE7', color:'#166534', border:'2px solid #BBF7D0', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   contactBtn: { padding:'8px 16px', background:'var(--red-pale)', color:'var(--red)', border:'2px solid #FECACA', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   waBtn: { padding:'8px 16px', background:'#DCFCE7', color:'#166534', border:'2px solid #BBF7D0', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   loadWrap: { display:'flex', justifyContent:'center', padding:'60px 0' },

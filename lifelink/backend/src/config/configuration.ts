@@ -7,6 +7,7 @@ export default () => ({
     name: process.env.DATABASE_NAME || 'lifelink',
     user: process.env.DATABASE_USER || 'lifelink_user',
     password: process.env.DATABASE_PASSWORD || 'password',
+    ssl: process.env.DATABASE_SSL === 'true',
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'default_secret_change_in_production',

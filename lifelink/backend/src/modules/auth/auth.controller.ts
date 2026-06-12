@@ -25,6 +25,13 @@ class RefreshTokenDto {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check if phone/email is already registered' })
+  check(@Body() dto: SendOtpDto) {
+    return this.authService.checkIdentifier(dto.identifier);
+  }
+
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send OTP to phone number or email' })
@@ -37,7 +44,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify OTP and get JWT tokens' })
   verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto.identifier, dto.otp);
+    return this.authService.verifyOtp(dto.identifier, dto.otp, dto.name);
   }
 
   @Post('login')
@@ -60,7 +67,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with Google ID token' })
   googleLogin(@Body() dto: GoogleLoginDto) {
-    return this.authService.googleLogin(dto.idToken);
+    return this.authService.googleLogin(dto.accessToken);
   }
 
   @Post('refresh')

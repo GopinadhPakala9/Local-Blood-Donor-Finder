@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { donors } from '../api'
 
+const fmtBG = bg => bg ? bg.replace('+', '+ve').replace('-', '-ve') : bg
 const BG_MAP = {'A+':'#EBF5FB','A-':'#D6EAF8','B+':'#FDEBD0','B-':'#FAD7A0','O+':'#FDEDEC','O-':'#FADBD8','AB+':'#E8DAEF','AB-':'#D7BDE2'}
 const BG_TEXT= {'A+':'#1A5276','A-':'#154360','B+':'#784212','B-':'#6E2F1A','O+':'#7B241C','O-':'#641E16','AB+':'#4A235A','AB-':'#3B1A59'}
 const GROUPS = ['A+','A-','B+','B-','O+','O-','AB+','AB-']
 
-function DonorCard({ donor, onCall, onWhatsApp }) {
+function DonorCard({ donor, onCall, onWhatsApp, onView }) {
   const bg   = BG_MAP[donor.blood_group] || '#F3F4F6'
   const tx   = BG_TEXT[donor.blood_group] || '#374151'
   const init = donor.name?.[0]?.toUpperCase() || '?'
 
   return (
-    <div style={S.card} className="fade-in">
+    <div style={{...S.card, cursor:'pointer'}} className="fade-in" onClick={onView}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'; e.currentTarget.style.transform='translateY(-2px)' }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow='var(--shadow-sm)'; e.currentTarget.style.transform='translateY(0)' }}
+    >
       <div style={S.cardTop}>
         <div style={S.avatarWrap}>
           <div style={S.avatar}>{init}</div>
@@ -20,6 +25,7 @@ function DonorCard({ donor, onCall, onWhatsApp }) {
         <div style={{flex:1}}>
           <div style={S.name}>{donor.name || 'Anonymous Donor'}</div>
           <div style={S.loc}>📍 {donor.city || 'Unknown'}{donor.state ? `, ${donor.state}` : ''}</div>
+          {donor.phone && <div style={S.phone}>📞 {donor.phone}</div>}
           {donor.distance && <div style={S.dist}>🗺 {donor.distance}</div>}
         </div>
         <div style={{...S.avail, ...(donor.is_available ? S.availY : S.availN)}}>
@@ -35,8 +41,8 @@ function DonorCard({ donor, onCall, onWhatsApp }) {
 
       {donor.is_available && (
         <div style={S.actions}>
-          <button style={S.callBtn} onClick={() => onCall(donor.phone)}>📞 Call</button>
-          <button style={S.waBtn} onClick={() => onWhatsApp(donor.phone, donor.blood_group)}>💬 WhatsApp</button>
+          <button style={S.callBtn} onClick={e => { e.stopPropagation(); onCall(donor.phone) }}>📞 Call</button>
+          <button style={S.waBtn} onClick={e => { e.stopPropagation(); onWhatsApp(donor.phone, donor.blood_group) }}>💬 WhatsApp</button>
         </div>
       )}
     </div>
@@ -44,6 +50,7 @@ function DonorCard({ donor, onCall, onWhatsApp }) {
 }
 
 export default function DonorSearch() {
+  const nav = useNavigate()
   const [filters, setFilters] = useState({ blood_group:'', city:'', radius:10, page:1, limit:12 })
   const [result, setResult]   = useState({ donors:[], total:0 })
   const [loading, setLoading] = useState(false)
@@ -66,7 +73,7 @@ export default function DonorSearch() {
   const prevPage = () => { const f = { ...filters, page: Math.max(1, filters.page - 1) }; setFilters(f); search(f) }
 
   const callDonor = phone => { if (phone) window.location.href = `tel:${phone}` }
-  const waDonor   = (phone, bg) => { if (phone) window.open(`https://wa.me/${phone.replace(/\D/g,'')}?text=Hi, I need blood group ${bg}. Are you available to donate?`) }
+  const waDonor   = (phone, bg) => { if (phone) window.open(`https://wa.me/${phone.replace(/\D/g,'')}?text=${encodeURIComponent(`Hi, I need blood group ${fmtBG(bg)}. Are you available to donate?`)}`) }
 
   const totalPages = Math.ceil((result.total || 0) / filters.limit)
 
@@ -135,7 +142,7 @@ export default function DonorSearch() {
           </div>
           <div style={S.grid}>
             {result.donors.map(d => (
-              <DonorCard key={d.id} donor={d} onCall={callDonor} onWhatsApp={waDonor} />
+              <DonorCard key={d.id} donor={d} onCall={callDonor} onWhatsApp={waDonor} onView={() => nav(`/donors/${d.id}`)} />
             ))}
           </div>
           {totalPages > 1 && (
@@ -174,6 +181,7 @@ const S = {
   bgChip: { position:'absolute', bottom:-6, right:-6, padding:'2px 7px', borderRadius:10, fontSize:11, fontWeight:800, border:'2px solid white' },
   name: { fontSize:15, fontWeight:700, color:'var(--text)' },
   loc: { fontSize:12, color:'var(--text-3)', marginTop:2 },
+  phone: { fontSize:12, color:'var(--text-2)', marginTop:2 },
   dist: { fontSize:12, color:'var(--red)', fontWeight:500, marginTop:1 },
   avail: { fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20 },
   availY: { background:'#DCFCE7', color:'#166534' },

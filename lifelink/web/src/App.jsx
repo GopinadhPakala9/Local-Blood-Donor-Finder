@@ -5,6 +5,8 @@ import DonorSearch    from './pages/DonorSearch'
 import BloodRequests  from './pages/BloodRequests'
 import CreateRequest  from './pages/CreateRequest'
 import DonorProfile   from './pages/DonorProfile'
+import ProfilePage    from './pages/ProfilePage'
+import MyDonations   from './pages/MyDonations'
 import Navbar         from './components/Navbar'
 
 function PrivateLayout({ children }) {
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/donors/:id" element={<PrivateLayout><DonorProfile /></PrivateLayout>} />
         <Route path="/requests" element={<PrivateLayout><BloodRequests /></PrivateLayout>} />
         <Route path="/requests/new" element={<PrivateLayout><CreateRequest /></PrivateLayout>} />
+        <Route path="/profile"       element={<PrivateLayout><ProfilePage /></PrivateLayout>} />
+        <Route path="/my-donations"  element={<PrivateLayout><MyDonations /></PrivateLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

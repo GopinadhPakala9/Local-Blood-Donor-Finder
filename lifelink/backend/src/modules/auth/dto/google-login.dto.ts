@@ -2,7 +2,7 @@ import { IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GoogleLoginDto {
-  @ApiProperty({ description: 'Firebase ID token from Google Sign-In' })
+  @ApiProperty({ description: 'Google OAuth access token from client-side sign-in' })
   @IsString()
-  idToken: string;
+  accessToken: string;
 }

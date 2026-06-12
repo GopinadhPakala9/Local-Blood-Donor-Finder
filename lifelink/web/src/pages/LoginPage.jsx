@@ -1,6 +1,9 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useGoogleLogin } from '@react-oauth/google'
 import { auth } from '../api'
+
+const GOOGLE_CONFIGURED = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 const BloodDropIllustration = () => (
   <svg viewBox="0 0 400 420" fill="none" xmlns="http://www.w3.org/2000/svg" style={{width:'100%',maxWidth:380}}>
@@ -49,9 +52,11 @@ const OTP_LENGTH = 6
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [mode, setMode]         = useState('otp')    // 'otp' | 'password'
+  const [authMode, setAuthMode]  = useState('signin') // 'signin' | 'signup'
+  const [mode, setMode]         = useState('otp')    // 'otp' | 'password'  (signin sub-tabs)
   const [step, setStep]         = useState('phone')  // 'phone' | 'otp' | 'set-password'
   const [identifier, setIdentifier] = useState('')
+  const [name, setName]         = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [otp, setOtp]           = useState(Array(OTP_LENGTH).fill(''))
@@ -76,14 +81,44 @@ export default function LoginPage() {
   const isPhone = v => /^\+?[0-9]{10,13}$/.test(v)
   const normalise = v => isEmail(v) ? v.trim().toLowerCase() : (v.startsWith('+') ? v : `+91${v}`)
 
+  const switchTo = mode => { setAuthMode(mode); setError('') }
+
+  const ErrorBox = () => {
+    if (!error) return null
+    if (error === '__SWITCH_SIGNIN__') return (
+      <div style={S.err}>
+        Account already exists.{' '}
+        <button type="button" style={S.switchLink} onClick={() => switchTo('signin')}>Switch to Sign In →</button>
+      </div>
+    )
+    if (error === '__SWITCH_SIGNUP__') return (
+      <div style={S.err}>
+        No account found.{' '}
+        <button type="button" style={S.switchLink} onClick={() => switchTo('signup')}>Switch to Sign Up →</button>
+      </div>
+    )
+    return <p style={S.err}>{error}</p>
+  }
+
   const handleSendOtp = async e => {
     e.preventDefault()
     setError('')
+    if (authMode === 'signup' && !name.trim()) { setError('Please enter your full name'); return }
     if (!isEmail(identifier) && !isPhone(identifier)) {
       setError('Enter a valid phone number or email address'); return
     }
     setLoading(true)
     try {
+      const checkRes = await auth.check(normalise(identifier))
+      const exists = checkRes?.data?.exists ?? checkRes?.exists
+      if (authMode === 'signup' && exists) {
+        setError('__SWITCH_SIGNIN__')
+        return
+      }
+      if (authMode === 'signin' && !exists) {
+        setError('__SWITCH_SIGNUP__')
+        return
+      }
       const res = await auth.sendOtp(normalise(identifier))
       if (res.data?.devOtp) {
         setDevOtp(res.data.devOtp)
@@ -134,6 +169,27 @@ export default function LoginPage() {
     } finally { setLoading(false) }
   }
 
+  const googleLogin = useGoogleLogin({
+    onSuccess: async tokenResponse => {
+      setLoading(true); setError('')
+      try {
+        const res = await auth.googleLogin(tokenResponse.access_token)
+        saveSession(res)
+      } catch (err) {
+        setError(err?.data?.message || err?.error?.message || 'Google sign-in failed.')
+      } finally { setLoading(false) }
+    },
+    onError: () => setError('Google sign-in was cancelled or failed.'),
+  })
+
+  const handleGoogleClick = () => {
+    if (!GOOGLE_CONFIGURED) {
+      setError('Google Sign-In not configured. Add VITE_GOOGLE_CLIENT_ID to web/.env')
+      return
+    }
+    googleLogin()
+  }
+
   const handleSetPassword = async e => {
     e.preventDefault(); setError('')
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
@@ -153,7 +209,7 @@ export default function LoginPage() {
     if (code.length < OTP_LENGTH) { setError('Enter the complete 6-digit OTP'); return }
     setLoading(true); setError('')
     try {
-      const res = await auth.verifyOtp(normalise(identifier), code)
+      const res = await auth.verifyOtp(normalise(identifier), code, authMode === 'signup' ? name.trim() : undefined)
       saveSession(res)
     } catch (err) {
       setError(err?.error?.message || 'Invalid OTP. Please try again.')
@@ -188,21 +244,31 @@ export default function LoginPage() {
       {/* Right Panel */}
       <div style={S.right}>
         <div style={S.card} className="fade-in">
-          {/* Mode tabs — only on first step */}
+          {/* ── TOP TABS: Sign In / Sign Up ─────────────────────── */}
           {step === 'phone' && (
             <div style={S.modeTabs}>
-              <button style={{...S.modeTab, ...(mode==='otp'      ? S.modeTabActive : {})}} onClick={() => { setMode('otp');      setError('') }}>📱 OTP Login</button>
-              <button style={{...S.modeTab, ...(mode==='password' ? S.modeTabActive : {})}} onClick={() => { setMode('password'); setError('') }}>🔐 Password</button>
+              <button style={{...S.modeTab, ...(authMode==='signin' ? S.modeTabActive : {})}}
+                onClick={() => { setAuthMode('signin'); setError('') }}>Sign In</button>
+              <button style={{...S.modeTab, ...(authMode==='signup' ? S.modeTabActive : {})}}
+                onClick={() => { setAuthMode('signup'); setError('') }}>Sign Up</button>
             </div>
           )}
 
-          {/* ── PASSWORD MODE ───────────────────────────────────── */}
-          {step === 'phone' && mode === 'password' && (
+          {/* ── SIGN IN — sub-tabs OTP / Password ───────────────── */}
+          {step === 'phone' && authMode === 'signin' && (
+            <div style={{...S.modeTabs, background:'transparent', padding:0, marginBottom:16}}>
+              <button style={{...S.modeTab, fontSize:12, ...(mode==='otp'      ? S.modeTabActive : {})}} onClick={() => { setMode('otp');      setError('') }}>📱 OTP</button>
+              <button style={{...S.modeTab, fontSize:12, ...(mode==='password' ? S.modeTabActive : {})}} onClick={() => { setMode('password'); setError('') }}>🔐 Password</button>
+            </div>
+          )}
+
+          {/* ── SIGN IN — PASSWORD ──────────────────────────────── */}
+          {step === 'phone' && authMode === 'signin' && mode === 'password' && (
             <>
               <div style={S.cardTop}>
                 <div style={S.avatar}>🔐</div>
-                <h1 style={S.h1}>Sign In</h1>
-                <p style={S.sub}>Enter your phone or email and password</p>
+                <h1 style={S.h1}>Welcome Back</h1>
+                <p style={S.sub}>Sign in with your phone or email and password</p>
               </div>
               <form onSubmit={handlePasswordLogin} style={S.form}>
                 <label style={S.label}>Phone Number or Email</label>
@@ -220,39 +286,33 @@ export default function LoginPage() {
                     {showPass ? '🙈' : '👁️'}
                   </button>
                 </div>
-                {error && <p style={S.err}>{error}</p>}
+                <ErrorBox />
                 <button style={S.btn} type="submit" disabled={loading}>
                   {loading ? <span style={S.spinner}/> : '🔐'}
                   {loading ? 'Signing in…' : 'Sign In'}
                 </button>
                 <p style={{...S.terms, marginTop:8}}>
                   Don't have a password?{' '}
-                  <button type="button" style={S.resendBtn} onClick={() => { setMode('otp'); setError('') }}>Login with OTP first</button>
+                  <button type="button" style={S.resendBtn} onClick={() => { setMode('otp'); setError('') }}>Use OTP instead</button>
                 </p>
               </form>
             </>
           )}
 
-          {/* ── OTP MODE ────────────────────────────────────────── */}
-          {step === 'phone' && mode === 'otp' && (
+          {/* ── SIGN IN — OTP ───────────────────────────────────── */}
+          {step === 'phone' && authMode === 'signin' && mode === 'otp' && (
             <>
               <div style={S.cardTop}>
                 <div style={S.avatar}>🩸</div>
-                <h1 style={S.h1}>Welcome to LifeLink</h1>
+                <h1 style={S.h1}>Welcome Back</h1>
                 <p style={S.sub}>Sign in with your mobile number or email</p>
               </div>
               <form onSubmit={handleSendOtp} style={S.form}>
                 <label style={S.label}>Phone Number or Email</label>
                 <div style={S.inputWrap}>
                   <span style={S.prefix}>{isEmail(identifier) ? '✉️' : '📱'}</span>
-                  <input
-                    style={S.input}
-                    type="text"
-                    placeholder="9876543210 or name@email.com"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                    autoFocus
-                  />
+                  <input style={S.input} type="text" placeholder="9876543210 or name@email.com"
+                    value={identifier} onChange={e => setIdentifier(e.target.value)} autoFocus />
                 </div>
                 <p style={{fontSize:12,color:'var(--text-3)',marginTop:-6}}>
                   {isEmail(identifier)
@@ -261,14 +321,14 @@ export default function LoginPage() {
                       ? '✅ OTP will be sent to your registered email'
                       : 'Enter your 10-digit mobile number or email address'}
                 </p>
-                {error && <p style={S.err}>{error}</p>}
+                <ErrorBox />
                 <button style={S.btn} type="submit" disabled={loading}>
                   {loading ? <span style={S.spinner} /> : null}
                   {loading ? 'Sending…' : 'Send OTP →'}
                 </button>
               </form>
               <div style={S.divider}><span>or</span></div>
-              <button style={S.gBtn} onClick={() => alert('Google Sign-In requires Firebase setup')}>
+              <button style={S.gBtn} onClick={handleGoogleClick} disabled={loading}>
                 <svg width="20" height="20" viewBox="0 0 24 24" style={{marginRight:8}}>
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -278,6 +338,44 @@ export default function LoginPage() {
                 Continue with Google
               </button>
               <p style={S.terms}>By continuing, you agree to our <a href="#" style={S.link}>Terms</a> and <a href="#" style={S.link}>Privacy Policy</a></p>
+            </>
+          )}
+
+          {/* ── SIGN UP ─────────────────────────────────────────── */}
+          {step === 'phone' && authMode === 'signup' && (
+            <>
+              <div style={S.cardTop}>
+                <div style={S.avatar}>🩸</div>
+                <h1 style={S.h1}>Create Account</h1>
+                <p style={S.sub}>Join LifeLink — save lives near you</p>
+              </div>
+              <form onSubmit={handleSendOtp} style={S.form}>
+                <label style={S.label}>Full Name</label>
+                <div style={S.inputWrap}>
+                  <span style={S.prefix}>👤</span>
+                  <input style={S.input} type="text" placeholder="e.g. Ravi Kumar"
+                    value={name} onChange={e => setName(e.target.value)} autoFocus />
+                </div>
+                <label style={S.label}>Phone Number or Email</label>
+                <div style={S.inputWrap}>
+                  <span style={S.prefix}>{isEmail(identifier) ? '✉️' : '📱'}</span>
+                  <input style={S.input} type="text" placeholder="9876543210 or name@email.com"
+                    value={identifier} onChange={e => setIdentifier(e.target.value)} />
+                </div>
+                <p style={{fontSize:12,color:'var(--text-3)',marginTop:-6}}>
+                  {isEmail(identifier)
+                    ? '✅ OTP will be sent to this email'
+                    : identifier.length >= 10 && isPhone(identifier)
+                      ? '✅ OTP will be sent to your registered email'
+                      : 'Enter your 10-digit mobile number or email address'}
+                </p>
+                <ErrorBox />
+                <button style={S.btn} type="submit" disabled={loading}>
+                  {loading ? <span style={S.spinner} /> : null}
+                  {loading ? 'Sending OTP…' : 'Send OTP →'}
+                </button>
+              </form>
+              <p style={S.terms}>By signing up, you agree to our <a href="#" style={S.link}>Terms</a> and <a href="#" style={S.link}>Privacy Policy</a></p>
             </>
           )}
 
@@ -323,7 +421,7 @@ export default function LoginPage() {
           {step === 'otp' && (
             <>
               <div style={S.cardTop}>
-                <button onClick={() => { setStep('phone'); setError(''); setOtp(Array(OTP_LENGTH).fill('')); setDevOtp(''); setOtpChannel('') }} style={S.back}>← Back</button>
+                <button onClick={() => { setStep('phone'); setError(''); setOtp(Array(OTP_LENGTH).fill('')); setDevOtp(''); setOtpChannel(''); }} style={S.back}>← Back</button>
                 <div style={S.avatar}>📱</div>
                 <h1 style={S.h1}>Verify Your Number</h1>
                 <p style={S.sub}>
@@ -463,6 +561,7 @@ const S = {
   modeTab: { flex:1, padding:'9px', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', background:'none', color:'var(--text-2)', transition:'all .15s' },
   modeTabActive: { background:'white', color:'var(--red)', boxShadow:'0 1px 4px rgba(0,0,0,.12)' },
   eyeBtn: { background:'none', border:'none', cursor:'pointer', padding:'0 10px', fontSize:16, color:'var(--text-3)' },
+  switchLink: { background:'none', border:'none', color:'#C0392B', fontWeight:700, cursor:'pointer', fontSize:13, textDecoration:'underline', padding:0 },
 }
 
 function var_radius_lg() { return 20 }

@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import * as admin from 'firebase-admin';
+import axios from 'axios';
 import * as nodemailer from 'nodemailer';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from '../../database/entities/user.entity';
@@ -92,7 +92,7 @@ export class AuthService {
     }
   }
 
-  async verifyOtp(identifier: string, otp: string): Promise<{ accessToken: string; refreshToken: string; user: User; has_password: boolean }> {
+  async verifyOtp(identifier: string, otp: string, name?: string): Promise<{ accessToken: string; refreshToken: string; user: User; has_password: boolean }> {
     const key = identifier.toLowerCase().trim();
     const stored = AuthService.otpStore.get(key);
     if (!stored) throw new BadRequestException('OTP not found or expired. Please request a new OTP.');
@@ -109,14 +109,22 @@ export class AuthService {
     if (this.isEmail(key)) {
       const found = await this.usersRepo.createQueryBuilder('u').addSelect('u.password').where('u.email = :key', { key }).getOne();
       has_password = !!found?.password;
-      user = found ?? await this.usersRepo.save(this.usersRepo.create({ email: key, phone: `email_${Date.now()}`, name: '', role: UserRole.DONOR }));
+      user = found ?? await this.usersRepo.save(this.usersRepo.create({ email: key, phone: `email_${Date.now()}`, name: name || '', role: UserRole.DONOR }));
     } else {
       const found = await this.usersRepo.createQueryBuilder('u').addSelect('u.password').where('u.phone = :key', { key }).getOne();
       has_password = !!found?.password;
-      user = found ?? await this.usersRepo.save(this.usersRepo.create({ phone: key, name: '', role: UserRole.DONOR }));
+      user = found ?? await this.usersRepo.save(this.usersRepo.create({ phone: key, name: name || '', role: UserRole.DONOR }));
     }
 
     return { ...this.generateTokens(user), user, has_password };
+  }
+
+  async checkIdentifier(identifier: string): Promise<{ exists: boolean }> {
+    const key = identifier.toLowerCase().trim();
+    const user = this.isEmail(key)
+      ? await this.usersRepo.findOne({ where: { email: key } })
+      : await this.usersRepo.findOne({ where: { phone: key } });
+    return { exists: !!user };
   }
 
   // ── Password login ───────────────────────────────────────────────────────────
@@ -145,22 +153,27 @@ export class AuthService {
     return { message: 'Password set successfully.' };
   }
 
-  async googleLogin(idToken: string): Promise<{ accessToken: string; refreshToken: string; user: User }> {
-    let decoded: admin.auth.DecodedIdToken;
+  async googleLogin(accessToken: string): Promise<{ accessToken: string; refreshToken: string; user: User }> {
+    let payload: any;
     try {
-      decoded = await admin.auth().verifyIdToken(idToken);
+      const { data } = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      payload = data;
     } catch {
-      throw new UnauthorizedException('Invalid Google ID token');
+      throw new UnauthorizedException('Invalid Google access token.');
     }
 
-    let user = await this.usersRepo.findOne({ where: { email: decoded.email } });
+    if (!payload?.email) throw new UnauthorizedException('Google account has no email.');
+
+    let user = await this.usersRepo.findOne({ where: { email: payload.email } });
     if (!user) {
       user = this.usersRepo.create({
-        email: decoded.email,
-        name: decoded.name || '',
-        phone: decoded.phone_number || `google_${decoded.uid}`,
+        email: payload.email,
+        name: payload.name || '',
+        phone: `google_${payload.sub}`,
         role: UserRole.DONOR,
-        is_verified: decoded.email_verified || false,
+        is_verified: payload.email_verified || false,
       });
       await this.usersRepo.save(user);
     }

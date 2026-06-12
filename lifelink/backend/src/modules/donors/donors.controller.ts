@@ -1,6 +1,7 @@
 import {
-  Controller, Get, Post, Body, Param, Query, UseGuards, ParseUUIDPipe,
+  Controller, Get, Post, Patch, Body, Param, Query, UseGuards, ParseUUIDPipe,
 } from '@nestjs/common';
+import { IsBoolean } from 'class-validator';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { DonorsService } from './donors.service';
 import { RegisterDonorDto } from './dto/register-donor.dto';
@@ -20,6 +21,14 @@ export class DonorsController {
   @ApiOperation({ summary: 'Register current user as a blood donor' })
   register(@CurrentUser() user: User, @Body() dto: RegisterDonorDto) {
     return this.donorsService.register(user.id, dto);
+  }
+
+  @Patch('availability')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set donor availability (active/inactive)' })
+  setAvailability(@CurrentUser() user: User, @Body('is_available') isAvailable: boolean) {
+    return this.donorsService.setAvailability(user.id, isAvailable);
   }
 
   @Get('search')

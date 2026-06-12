@@ -11,5 +11,6 @@ import { BloodRequest } from '../../database/entities/blood-request.entity';
   imports: [TypeOrmModule.forFeature([User, Hospital, Donation, BloodRequest])],
   controllers: [AdminController],
   providers: [AdminService],
+  exports: [AdminService],
 })
 export class AdminModule {}

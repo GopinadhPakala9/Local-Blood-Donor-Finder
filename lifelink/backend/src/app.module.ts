@@ -42,6 +42,7 @@ import { Notification } from './database/entities/notification.entity';
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: configService.get('env') === 'development',
         logging: configService.get('env') === 'development',
+        ssl: configService.get('database.ssl') ? { rejectUnauthorized: false } : false,
       }),
       inject: [ConfigService],
     }),

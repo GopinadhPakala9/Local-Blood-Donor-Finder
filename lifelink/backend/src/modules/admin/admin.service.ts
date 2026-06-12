@@ -43,20 +43,16 @@ export class AdminService {
   }
 
   async getDashboardStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const firstOfMonth = new Date();
+    firstOfMonth.setDate(1); firstOfMonth.setHours(0, 0, 0, 0);
 
-    const [totalDonors, totalRequests, totalDonations, openRequests, donationsToday] = await Promise.all([
-      this.usersRepo.count({ where: { role: 'donor' as any } }),
-      this.requestsRepo.count(),
-      this.donationsRepo.count(),
+    const [activeDonors, openRequests, totalHospitals, livesSavedThisMonth] = await Promise.all([
+      this.usersRepo.count({ where: { role: 'donor' as any, is_available: true } }),
       this.requestsRepo.count({ where: { status: 'Open' as any } }),
-      this.donationsRepo
-        .createQueryBuilder('d')
-        .where('d.donated_on >= :today', { today })
-        .getCount(),
+      this.hospitalsRepo.count(),
+      this.requestsRepo.count({ where: { status: 'Fulfilled' as any } }),
     ]);
 
-    return { totalDonors, totalRequests, totalDonations, openRequests, donationsToday };
+    return { activeDonors, openRequests, totalHospitals, livesSavedThisMonth };
   }
 }

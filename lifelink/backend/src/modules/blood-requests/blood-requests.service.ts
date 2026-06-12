@@ -31,18 +31,20 @@ export class BloodRequestsService {
   }
 
   async findAll(filters: {
-    blood_group?: string; city?: string; urgency?: string; status?: string; page?: number; limit?: number;
+    blood_group?: string; city?: string; urgency?: string; status?: string; page?: number; limit?: number; requester_id?: string;
   }): Promise<{ requests: BloodRequest[]; total: number; page: number; limit: number }> {
-    const { blood_group, city, urgency, status = 'Open', page = 1, limit = 20 } = filters;
+    const { blood_group, city, urgency, status = 'Open', page = 1, limit = 20, requester_id } = filters;
     const qb = this.requestsRepo.createQueryBuilder('r')
       .leftJoinAndSelect('r.requester', 'requester')
       .where('r.status = :status', { status });
+
+    if (requester_id) qb.andWhere('r.requester_id = :requester_id', { requester_id });
 
     if (blood_group) qb.andWhere('r.blood_group = :blood_group', { blood_group });
     if (city) qb.andWhere('LOWER(r.city) = LOWER(:city)', { city });
     if (urgency) qb.andWhere('r.urgency = :urgency', { urgency });
 
-    qb.orderBy(`CASE r.urgency WHEN 'Critical' THEN 1 WHEN 'Urgent' THEN 2 ELSE 3 END`, 'ASC')
+    qb.orderBy('r.urgency', 'DESC')
       .addOrderBy('r.created_at', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -71,6 +73,10 @@ export class BloodRequestsService {
 
   async cancel(id: string, userId: string, userRole: string): Promise<BloodRequest> {
     return this.update(id, userId, userRole, { status: RequestStatus.CANCELLED });
+  }
+
+  async fulfill(id: string, userId: string, userRole: string): Promise<BloodRequest> {
+    return this.update(id, userId, userRole, { status: RequestStatus.FULFILLED });
   }
 
   async getNearby(lat: number, lng: number, radiusKm: number = 20): Promise<any[]> {
