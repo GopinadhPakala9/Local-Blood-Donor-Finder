@@ -36,6 +36,17 @@ export const donors = {
   setAvailability: (is_available) => api.patch('/donors/availability', { is_available }),
 }
 
+export const hospitals = {
+  list:    (params) => api.get('/hospitals', { params }),
+  getById: (id)     => api.get(`/hospitals/${id}`),
+}
+
+export const bloodBanks = {
+  list:    (params) => api.get('/blood-banks', { params }),
+  nearby:  (params) => api.get('/blood-banks/nearby', { params }),
+  getById: (id)     => api.get(`/blood-banks/${id}`),
+}
+
 export const requests = {
   list:    (params) => api.get('/blood-requests',               { params }),
   mine:    (params) => api.get('/blood-requests/mine',          { params }),

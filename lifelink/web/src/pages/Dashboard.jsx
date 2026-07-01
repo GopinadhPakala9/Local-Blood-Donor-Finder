@@ -197,7 +197,7 @@ export default function Dashboard() {
         <div style={S.quickGrid}>
           {[
             { icon:'👤', label:'Become a Donor', sub:'Register to help save lives', color:'#3B82F6', to:'/donors' },
-            { icon:'🏥', label:'Find Hospitals', sub:'Locate nearby blood banks', color:'#8B5CF6', to:'/donors' },
+            { icon:'🏥', label:'Find Hospitals', sub:'Locate nearby blood banks', color:'#8B5CF6', to:'/hospitals' },
             { icon:'📊', label:'My Donations', sub:'Track your donation history', color:'#10B981', to:'/my-donations' },
           ].map(q => (
             <button key={q.label} style={{...S.qCard, borderLeft:`4px solid ${q.color}`}} onClick={() => nav(q.to)}>

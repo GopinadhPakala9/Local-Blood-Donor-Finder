@@ -35,7 +35,9 @@ export class BloodBanksService {
   }
 
   async findAll(filters: { city?: string; page?: number; limit?: number }) {
-    const { city, page = 1, limit = 20 } = filters;
+    const { city } = filters;
+    const page = Number(filters.page) > 0 ? Number(filters.page) : 1;
+    const limit = Number(filters.limit) > 0 ? Number(filters.limit) : 20;
     const qb = this.banksRepo.createQueryBuilder('b')
       .leftJoinAndSelect('b.inventory', 'inv');
     if (city) qb.andWhere('LOWER(b.city) = LOWER(:city)', { city });
