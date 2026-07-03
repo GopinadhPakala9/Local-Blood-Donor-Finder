@@ -1,43 +1,57 @@
 import 'reflect-metadata';
+import * as bcrypt from 'bcrypt';
 import { AppDataSource } from './data-source';
 import { User, UserRole } from './entities/user.entity';
 
-// One-time bootstrap: promote an existing account to system administrator.
-// The account must already exist (register it in the app first via OTP/Google),
-// because there is no admin yet to grant the role through the UI.
+// Bootstrap a system administrator.
+// - If the account (email/phone) exists, it is promoted to admin.
+// - If it doesn't exist and an email is given, a new admin account is created.
+// - If a password is provided, it is set (bcrypt) so you can log in via the
+//   "Password" tab with email + password — no OTP required.
 //
 // Usage:
-//   npm run make-admin -- <email-or-phone> [name]
+//   npm run make-admin -- <email-or-phone> [name] [password]
 // Examples:
-//   npm run make-admin -- admin@lifelink.com Administrator
-//   npm run make-admin -- +919876543210
+//   npm run make-admin -- admin@lifelink.com Administrator "SomeSecret123"
+//   npm run make-admin -- +919876543210 Administrator
 async function run() {
   const identifier = process.argv[2];
   const name = process.argv[3] || 'Administrator';
+  const password = process.argv[4]; // optional — enables password login
 
   if (!identifier) {
-    console.error('Usage: npm run make-admin -- <email-or-phone> [name]');
+    console.error('Usage: npm run make-admin -- <email-or-phone> [name] [password]');
     process.exit(1);
   }
 
   await AppDataSource.initialize();
   const repo = AppDataSource.getRepository(User);
 
-  const user = await repo.findOne({ where: [{ email: identifier }, { phone: identifier }] });
+  let user = await repo.findOne({ where: [{ email: identifier }, { phone: identifier }] });
   if (!user) {
-    console.error(`✗ No user found with email/phone "${identifier}".`);
-    console.error('  Register that account in the app first (OTP or Google), then re-run.');
-    await AppDataSource.destroy();
-    process.exit(1);
+    const isEmail = identifier.includes('@');
+    user = repo.create({
+      name,
+      role: UserRole.ADMIN,
+      is_verified: true,
+      email: isEmail ? identifier : undefined,
+      phone: isEmail ? `admin_${Date.now()}` : identifier,
+    });
+    console.log(`Creating new admin account for "${identifier}"…`);
+  } else {
+    user.role = UserRole.ADMIN;
+    user.name = name;
+    user.is_verified = true;
+    console.log(`Promoting existing account "${identifier}" to admin…`);
   }
 
-  user.role = UserRole.ADMIN;
-  user.name = name;
-  user.is_verified = true;
-  await repo.save(user);
+  if (password) user.password = await bcrypt.hash(password, 10);
 
-  console.log(`✓ "${identifier}" is now ADMIN (name: "${user.name}", id: ${user.id}).`);
-  console.log('  → Log out and back in on the app so the new role takes effect.');
+  const saved = await repo.save(user);
+  console.log(`✓ Admin ready — id: ${saved.id}, name: "${saved.name}", email: ${saved.email || '-'}, phone: ${saved.phone}`);
+  console.log(password
+    ? '  → Log in via the "Password" tab with your email + password.'
+    : '  → No password set; use OTP/Google, or re-run with a password argument.');
 
   await AppDataSource.destroy();
 }
