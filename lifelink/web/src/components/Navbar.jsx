@@ -56,6 +56,9 @@ export default function Navbar() {
                 <button style={S.ddItem} onClick={() => { nav('/profile'); setOpen(false) }}>👤 Edit Profile</button>
                 <button style={S.ddItem} onClick={() => { nav('/requests/new');  setOpen(false) }}>🩸 Create Request</button>
                 <button style={S.ddItem} onClick={() => { nav('/my-donations'); setOpen(false) }}>💉 My Donations</button>
+                {user.role === 'admin' && (
+                  <button style={{...S.ddItem, color:'var(--red)', fontWeight:600}} onClick={() => { nav('/admin'); setOpen(false) }}>⚙️ Admin Panel</button>
+                )}
                 <hr style={{border:'none', borderTop:'1px solid var(--border)', margin:'4px 0'}} />
                 <button style={{...S.ddItem, color:'var(--red)'}} onClick={logout}>🚪 Sign Out</button>
               </div>

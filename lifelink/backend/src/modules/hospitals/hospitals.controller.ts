@@ -17,9 +17,9 @@ export class HospitalsController {
   constructor(private readonly service: HospitalsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Register a hospital' })
+  @ApiOperation({ summary: 'Register a hospital (admin only)' })
   create(@Body() dto: CreateHospitalDto) {
     return this.service.create(dto);
   }

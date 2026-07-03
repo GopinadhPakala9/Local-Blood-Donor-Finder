@@ -4,6 +4,7 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { BloodBanksService, CreateBloodBankDto } from './blood-banks.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { BloodGroup } from '../../database/entities/user.entity';
 import { IsEnum, IsInt, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -19,9 +20,9 @@ export class BloodBanksController {
   constructor(private readonly service: BloodBanksService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Register a blood bank' })
+  @ApiOperation({ summary: 'Register a blood bank (admin only)' })
   create(@Body() dto: CreateBloodBankDto) {
     return this.service.create(dto);
   }
@@ -49,7 +50,7 @@ export class BloodBanksController {
   }
 
   @Put(':id/inventory')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update blood unit stock for a blood group' })
   updateInventory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInventoryDto) {

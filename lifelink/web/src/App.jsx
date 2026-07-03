@@ -8,7 +8,9 @@ import DonorProfile   from './pages/DonorProfile'
 import ProfilePage    from './pages/ProfilePage'
 import MyDonations   from './pages/MyDonations'
 import Hospitals      from './pages/Hospitals'
+import AdminPanel     from './pages/AdminPanel'
 import Navbar         from './components/Navbar'
+import { isAdmin }    from './auth'
 
 function PrivateLayout({ children }) {
   const token = localStorage.getItem('accessToken')
@@ -21,6 +23,12 @@ function PrivateLayout({ children }) {
       </main>
     </>
   )
+}
+
+// Admin-only gate: non-admins are redirected home. Real enforcement is the
+// backend AdminGuard; this just hides the UI.
+function AdminOnly({ children }) {
+  return isAdmin() ? children : <Navigate to="/" replace />
 }
 
 export default function App() {
@@ -36,6 +44,7 @@ export default function App() {
         <Route path="/profile"       element={<PrivateLayout><ProfilePage /></PrivateLayout>} />
         <Route path="/my-donations"  element={<PrivateLayout><MyDonations /></PrivateLayout>} />
         <Route path="/hospitals"     element={<PrivateLayout><Hospitals /></PrivateLayout>} />
+        <Route path="/admin"         element={<PrivateLayout><AdminOnly><AdminPanel /></AdminOnly></PrivateLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

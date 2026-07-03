@@ -39,12 +39,21 @@ export const donors = {
 export const hospitals = {
   list:    (params) => api.get('/hospitals', { params }),
   getById: (id)     => api.get(`/hospitals/${id}`),
+  create:  (data)   => api.post('/hospitals', data),          // admin only
 }
 
 export const bloodBanks = {
   list:    (params) => api.get('/blood-banks', { params }),
   nearby:  (params) => api.get('/blood-banks/nearby', { params }),
   getById: (id)     => api.get(`/blood-banks/${id}`),
+  create:  (data)   => api.post('/blood-banks', data),        // admin only
+  updateInventory: (id, blood_group, available_units) =>       // admin only
+    api.put(`/blood-banks/${id}/inventory`, { blood_group, available_units }),
+}
+
+export const admin = {
+  stats: ()        => api.get('/admin/stats'),
+  users: (params)  => api.get('/admin/users', { params }),
 }
 
 export const requests = {
