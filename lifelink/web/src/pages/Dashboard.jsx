@@ -135,8 +135,8 @@ export default function Dashboard() {
         <div style={S.statsGrid}>
           <StatCard icon="👥" label="Active Donors"  value={loading ? '…' : (stats?.activeDonors ?? '—')}        sub={isAvailable ? 'Including you ✓' : 'Set yourself Active to appear'} color="#3B82F6" to="/donors" />
           <StatCard icon="🩸" label="Open Requests"  value={loading ? '…' : (stats?.openRequests ?? reqs.length)} sub={urgentCount ? `${urgentCount} urgent` : 'All clear'}             color="#C0392B" to="/requests" />
-          <StatCard icon="🏥" label="Hospitals"       value={loading ? '…' : (stats?.totalHospitals ?? '—')}       sub="Registered partners"                                              color="#8B5CF6" />
-          <StatCard icon="🏆" label="Lives Saved"     value={loading ? '…' : (stats?.livesSavedThisMonth ?? '—')}  sub="Donations this month"                                             color="#10B981" to="/profile" />
+          <StatCard icon="🏥" label="Hospitals"       value={loading ? '…' : (stats?.totalHospitals ?? '—')}       sub="Registered partners"                                              color="#8B5CF6" to="/hospitals" />
+          <StatCard icon="🏆" label="Lives Saved"     value={loading ? '…' : (stats?.livesSavedThisMonth ?? '—')}  sub="Donations this month"                                             color="#10B981" to="/my-donations" />
         </div>
 
         <div style={S.cols}>
