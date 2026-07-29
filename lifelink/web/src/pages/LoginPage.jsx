@@ -53,7 +53,7 @@ const OTP_LENGTH = 6
 export default function LoginPage() {
   const navigate = useNavigate()
   const [authMode, setAuthMode]  = useState('signin') // 'signin' | 'signup'
-  const [mode, setMode]         = useState('otp')    // 'otp' | 'password'  (signin sub-tabs)
+  const [mode, setMode]         = useState('password') // 'otp' | 'password'  (default: password; toggle via links)
   const [step, setStep]         = useState('phone')  // 'phone' | 'otp' | 'set-password'
   const [identifier, setIdentifier] = useState('')
   const [name, setName]         = useState('')
@@ -250,13 +250,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* ── SIGN IN — sub-tabs OTP / Password ───────────────── */}
-          {step === 'phone' && authMode === 'signin' && (
-            <div style={{...S.modeTabs, background:'transparent', padding:0, marginBottom:16}}>
-              <button style={{...S.modeTab, fontSize:12, ...(mode==='otp'      ? S.modeTabActive : {})}} onClick={() => { setMode('otp');      setError('') }}>📱 OTP</button>
-              <button style={{...S.modeTab, fontSize:12, ...(mode==='password' ? S.modeTabActive : {})}} onClick={() => { setMode('password'); setError('') }}>🔐 Password</button>
-            </div>
-          )}
+          {/* OTP / Password sub-tabs removed — Password is the default view;
+              use the "Use OTP instead" / "Sign in with password" links to switch. */}
 
           {/* ── SIGN IN — PASSWORD ──────────────────────────────── */}
           {step === 'phone' && authMode === 'signin' && mode === 'password' && (
@@ -323,6 +318,10 @@ export default function LoginPage() {
                   {loading ? 'Sending…' : 'Send OTP →'}
                 </button>
               </form>
+              <p style={{...S.terms, marginTop:8}}>
+                Have a password?{' '}
+                <button type="button" style={S.resendBtn} onClick={() => { setMode('password'); setError('') }}>Sign in with password</button>
+              </p>
               <div style={S.divider}><span>or</span></div>
               <button style={S.gBtn} onClick={handleGoogleClick} disabled={loading}>
                 <svg width="20" height="20" viewBox="0 0 24 24" style={{marginRight:8}}>
