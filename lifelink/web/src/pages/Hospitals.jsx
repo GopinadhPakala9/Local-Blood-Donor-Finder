@@ -19,9 +19,6 @@ function HospitalCard({ h }) {
           {h.phone && <div style={S.phone}>📞 {h.phone}</div>}
           {h.email && <div style={S.phone}>✉️ {h.email}</div>}
         </div>
-        {h.is_verified
-          ? <span style={{...S.chip, background:'#DCFCE7', color:'#166534'}}>✓ Verified</span>
-          : <span style={{...S.chip, background:'#FEF3C7', color:'#92400E'}}>⏳ Unverified</span>}
       </div>
       {h.license_number && <div style={S.meta}><span style={S.chip}>🪪 {h.license_number}</span></div>}
       {h.phone && (
