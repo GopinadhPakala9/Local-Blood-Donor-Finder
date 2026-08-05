@@ -45,9 +45,6 @@ function BankCard({ b }) {
           <div style={S.loc}>📍 {b.city || 'Unknown'}{b.state ? `, ${b.state}` : ''}</div>
           {b.phone && <div style={S.phone}>📞 {b.phone}</div>}
         </div>
-        {b.is_verified
-          ? <span style={{...S.chip, background:'#DCFCE7', color:'#166534'}}>✓ Verified</span>
-          : <span style={{...S.chip, background:'#FEF3C7', color:'#92400E'}}>⏳ Unverified</span>}
       </div>
 
       <div>
