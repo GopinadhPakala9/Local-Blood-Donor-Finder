@@ -23,11 +23,11 @@ export default function AdminPanel() {
   const [msg, setMsg] = useState(null) // { type:'ok'|'err', text }
 
   // hospital form
-  const [h, setH] = useState({ name: '', phone: '', email: '', city: '', state: '', latitude: '', longitude: '', license_number: '' })
+  const [h, setH] = useState({ name: '', phone: '', email: '', city: '', state: '', license_number: '' })
   const setHF = (k, v) => setH(s => ({ ...s, [k]: v }))
 
   // blood bank form
-  const [b, setB] = useState({ name: '', phone: '', city: '', state: '', latitude: '', longitude: '' })
+  const [b, setB] = useState({ name: '', phone: '', city: '', state: '' })
   const setBF = (k, v) => setB(s => ({ ...s, [k]: v }))
   const [units, setUnits] = useState(Object.fromEntries(GROUPS.map(g => [g, '']))) // '' = 0
 
@@ -36,10 +36,10 @@ export default function AdminPanel() {
     if (!h.name || !h.city || !h.state) { setMsg({ type: 'err', text: 'Name, city and state are required.' }); return }
     setLoading(true)
     try {
-      const payload = clean(h, ['latitude', 'longitude'])
+      const payload = clean(h)
       await hospitalsApi.create(payload)
       setMsg({ type: 'ok', text: `✓ Hospital "${h.name}" added.` })
-      setH({ name: '', phone: '', email: '', city: '', state: '', latitude: '', longitude: '', license_number: '' })
+      setH({ name: '', phone: '', email: '', city: '', state: '', license_number: '' })
     } catch (err) {
       setMsg({ type: 'err', text: err?.error?.message || err?.message || 'Failed to add hospital (are you an admin?).' })
     } finally { setLoading(false) }
@@ -50,7 +50,7 @@ export default function AdminPanel() {
     if (!b.name || !b.city || !b.state) { setMsg({ type: 'err', text: 'Name, city and state are required.' }); return }
     setLoading(true)
     try {
-      const payload = clean(b, ['latitude', 'longitude'])
+      const payload = clean(b)
       const res = await bloodBanksApi.create(payload)
       const bankId = res?.data?.id
       // set stock for any group with a positive number entered
@@ -61,7 +61,7 @@ export default function AdminPanel() {
         }
       }
       setMsg({ type: 'ok', text: `✓ Blood bank "${b.name}" added with inventory.` })
-      setB({ name: '', phone: '', city: '', state: '', latitude: '', longitude: '' })
+      setB({ name: '', phone: '', city: '', state: '' })
       setUnits(Object.fromEntries(GROUPS.map(g => [g, ''])))
     } catch (err) {
       setMsg({ type: 'err', text: err?.error?.message || err?.message || 'Failed to add blood bank (are you an admin?).' })
@@ -94,8 +94,6 @@ export default function AdminPanel() {
             <Field label="License number"><input style={S.input} value={h.license_number} onChange={e => setHF('license_number', e.target.value)} placeholder="TS-HOSP-1234" /></Field>
             <Field label="City *"><input style={S.input} value={h.city} onChange={e => setHF('city', e.target.value)} placeholder="Hyderabad" /></Field>
             <Field label="State *"><input style={S.input} value={h.state} onChange={e => setHF('state', e.target.value)} placeholder="Telangana" /></Field>
-            <Field label="Latitude"><input style={S.input} type="number" step="any" value={h.latitude} onChange={e => setHF('latitude', e.target.value)} placeholder="17.4239" /></Field>
-            <Field label="Longitude"><input style={S.input} type="number" step="any" value={h.longitude} onChange={e => setHF('longitude', e.target.value)} placeholder="78.4738" /></Field>
           </div>
           <button style={S.submit} disabled={loading}>{loading ? 'Saving…' : 'Add Hospital'}</button>
           <p style={S.note}>New hospitals start as unverified; verify them later from the directory/admin tools.</p>
@@ -107,8 +105,6 @@ export default function AdminPanel() {
             <Field label="Phone"><input style={S.input} value={b.phone} onChange={e => setBF('phone', e.target.value)} placeholder="+9140..." /></Field>
             <Field label="City *"><input style={S.input} value={b.city} onChange={e => setBF('city', e.target.value)} placeholder="Hyderabad" /></Field>
             <Field label="State *"><input style={S.input} value={b.state} onChange={e => setBF('state', e.target.value)} placeholder="Telangana" /></Field>
-            <Field label="Latitude"><input style={S.input} type="number" step="any" value={b.latitude} onChange={e => setBF('latitude', e.target.value)} placeholder="17.3850" /></Field>
-            <Field label="Longitude"><input style={S.input} type="number" step="any" value={b.longitude} onChange={e => setBF('longitude', e.target.value)} placeholder="78.4867" /></Field>
           </div>
 
           <div style={S.invLabel}>Blood inventory (units) — leave blank for 0</div>
