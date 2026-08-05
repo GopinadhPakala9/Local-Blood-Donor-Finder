@@ -66,8 +66,11 @@ export const requests = {
 }
 
 export const donations = {
-  log:  (data) => api.post('/donations', data),
-  mine: ()     => api.get('/donations/my'),
+  log:     (data) => api.post('/donations', data),
+  mine:    ()     => api.get('/donations/my'),
+  pending: ()     => api.get('/donations/pending'),
+  confirm: (id)   => api.post(`/donations/${id}/confirm`),
+  reject:  (id)   => api.post(`/donations/${id}/reject`),
 }
 
 export const notifications = {

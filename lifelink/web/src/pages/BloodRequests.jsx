@@ -36,7 +36,10 @@ export default function BloodRequests() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  const [pending, setPending] = useState([])
+  const loadPending = () => donations.pending().catch(() => ({})).then(res => setPending(res?.data || []))
+
+  useEffect(() => { load(); loadPending() }, [])
 
   const switchTab = t => { const f = {...filters, status:t, page:1}; setFilters(f); setActiveTab(t); load(f) }
   const upd = (k, v) => { const f = {...filters, [k]:v, page:1}; setFilters(f); load(f) }
@@ -45,12 +48,28 @@ export default function BloodRequests() {
   const [actioning, setActioning] = useState(null)
 
   const handleDonate = async (r) => {
-    if (!window.confirm(`Confirm you donated ${fmtBG(r.blood_group)} blood for ${r.patient_name}?`)) return
+    if (!window.confirm(`Confirm you donated ${fmtBG(r.blood_group)} blood for ${r.patient_name}?\n\nThe requester must confirm before you receive credit.`)) return
     setActioning(r.id)
     try {
       await donations.log({ donated_on: new Date().toISOString().slice(0,10), units: r.units_required || 1, blood_request_id: r.id })
+      alert("✅ Recorded — pending the requester's confirmation. You'll get credit once they confirm.")
       load()
-    } catch (e) { alert(e?.message || 'Failed to record donation') }
+    } catch (e) { alert(e?.error?.message || e?.message || 'Failed to record donation') }
+    finally { setActioning(null) }
+  }
+
+  const handleConfirmDonation = async (d) => {
+    setActioning(d.id)
+    try { await donations.confirm(d.id); loadPending(); load() }
+    catch (e) { alert(e?.error?.message || e?.message || 'Failed to confirm') }
+    finally { setActioning(null) }
+  }
+
+  const handleRejectDonation = async (d) => {
+    if (!window.confirm('Reject this donation claim? The donor will NOT receive credit.')) return
+    setActioning(d.id)
+    try { await donations.reject(d.id); loadPending() }
+    catch (e) { alert(e?.error?.message || e?.message || 'Failed to reject') }
     finally { setActioning(null) }
   }
 
@@ -73,6 +92,25 @@ export default function BloodRequests() {
         </div>
         <button style={S.newBtn} onClick={() => nav('/requests/new')}>+ New Request</button>
       </div>
+
+      {/* Donations awaiting confirmation (request owner / admin) */}
+      {pending.length > 0 && (
+        <div style={S.pendPanel}>
+          <div style={S.pendHead}>🔔 Donations awaiting your confirmation ({pending.length})</div>
+          {pending.map(d => (
+            <div key={d.id} style={S.pendRow}>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={S.pendName}>{d.donor_name || 'A donor'}{d.donor_blood_group ? ` · ${d.donor_blood_group}` : ''} — {d.units} unit(s)</div>
+                <div style={S.pendSub}>
+                  {d.patient_name ? `For ${d.patient_name}` : 'General donation'}{d.donor_phone ? ` · 📞 ${d.donor_phone}` : ''} · logged {timeAgo(d.created_at)}
+                </div>
+              </div>
+              <button style={S.confirmBtn} disabled={actioning===d.id} onClick={() => handleConfirmDonation(d)}>{actioning===d.id ? '…' : '✓ Confirm'}</button>
+              <button style={S.rejectBtn} disabled={actioning===d.id} onClick={() => handleRejectDonation(d)}>✕ Reject</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={S.tabs}>
@@ -195,6 +233,13 @@ const S = {
   fulfillBtn: { padding:'8px 16px', background:'#DCFCE7', color:'#166534', border:'2px solid #BBF7D0', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   contactBtn: { padding:'8px 16px', background:'var(--red-pale)', color:'var(--red)', border:'2px solid #FECACA', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   waBtn: { padding:'8px 16px', background:'#DCFCE7', color:'#166534', border:'2px solid #BBF7D0', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
+  pendPanel: { background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:12, padding:'14px 16px', marginBottom:20 },
+  pendHead: { fontSize:14, fontWeight:700, color:'#92400E', marginBottom:6 },
+  pendRow: { display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderTop:'1px solid #FDE68A', flexWrap:'wrap' },
+  pendName: { fontSize:14, fontWeight:600, color:'var(--text)' },
+  pendSub: { fontSize:12, color:'var(--text-3)', marginTop:2 },
+  confirmBtn: { padding:'7px 14px', background:'#16A34A', color:'white', border:'none', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
+  rejectBtn: { padding:'7px 14px', background:'white', color:'#991B1B', border:'2px solid #FECACA', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' },
   loadWrap: { display:'flex', justifyContent:'center', padding:'60px 0' },
   loader: { width:36, height:36, border:'3px solid var(--border)', borderTopColor:'var(--red)', borderRadius:'50%', animation:'spin .8s linear infinite' },
   empty: { textAlign:'center', padding:'60px 0' },

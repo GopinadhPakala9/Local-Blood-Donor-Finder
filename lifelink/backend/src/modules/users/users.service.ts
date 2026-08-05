@@ -43,7 +43,7 @@ export class UsersService {
   async getUserStats(id: string): Promise<{ totalDonations: number; lastDonation: Date | null }> {
     const result = await this.usersRepo.query(
       `SELECT COUNT(d.id) as total, MAX(d.donated_on) as last
-       FROM donations d WHERE d.donor_id = $1`,
+       FROM donations d WHERE d.donor_id = $1 AND d.status = 'verified'`,
       [id],
     );
     return {

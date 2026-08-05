@@ -33,6 +33,18 @@ export class Donation {
   @Column({ default: false })
   verified: boolean;
 
+  // Verification workflow: a self-reported donation starts 'pending' and only
+  // earns credit (points, fulfilled request, Lives Saved) once the request
+  // owner or an admin confirms it. 'rejected' = disputed / did not happen.
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  status: 'pending' | 'verified' | 'rejected';
+
+  @Column({ type: 'uuid', nullable: true })
+  verified_by: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  verified_at: Date;
+
   @Column({ type: 'text', nullable: true })
   certificate_url: string;
 

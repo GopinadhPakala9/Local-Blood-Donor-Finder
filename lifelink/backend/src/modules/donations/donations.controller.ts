@@ -24,6 +24,24 @@ export class DonationsController {
     return this.service.getMyDonations(user.id);
   }
 
+  @Get('pending')
+  @ApiOperation({ summary: 'Pending donations awaiting my (request-owner) or admin confirmation' })
+  getPending(@CurrentUser() user: User) {
+    return this.service.getPendingForActor(user);
+  }
+
+  @Post(':id/confirm')
+  @ApiOperation({ summary: 'Confirm a pending donation (request owner or admin)' })
+  confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.service.confirmDonation(id, user);
+  }
+
+  @Post(':id/reject')
+  @ApiOperation({ summary: 'Reject a pending donation (request owner or admin)' })
+  reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.service.rejectDonation(id, user);
+  }
+
   @Get(':id/certificate')
   @ApiOperation({ summary: 'Get donation certificate PDF URL' })
   getCertificate(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {

@@ -30,9 +30,11 @@ export default function MyDonations() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const totalDonated  = myDonations.reduce((s, d) => s + (d.units || 1), 0)
+  // Only VERIFIED donations count toward stats/badges.
+  const verified       = myDonations.filter(d => d.status === 'verified')
+  const totalDonated   = verified.reduce((s, d) => s + (d.units || 1), 0)
   const totalFulfilled = fulfilledReqs.length
-  const livesSaved    = totalDonated + totalFulfilled
+  const livesSaved     = totalDonated + totalFulfilled
 
   return (
     <div style={S.page}>
@@ -48,7 +50,7 @@ export default function MyDonations() {
       <div style={S.statsRow}>
         <div style={S.statBox}>
           <span style={{fontSize:32}}>💉</span>
-          <strong style={S.statVal}>{myDonations.length}</strong>
+          <strong style={S.statVal}>{verified.length}</strong>
           <span style={S.statLabel}>Times Donated</span>
         </div>
         <div style={S.statBox}>
@@ -63,7 +65,7 @@ export default function MyDonations() {
         </div>
         <div style={S.statBox}>
           <span style={{fontSize:32}}>🏆</span>
-          <strong style={S.statVal}>{getBadge(myDonations.length)}</strong>
+          <strong style={S.statVal}>{getBadge(verified.length)}</strong>
           <span style={S.statLabel}>Donor Badge</span>
         </div>
       </div>
@@ -92,7 +94,11 @@ export default function MyDonations() {
                   </div>
                   <div style={{textAlign:'right'}}>
                     <div style={S.units}>{d.units || 1} unit{(d.units||1)!==1?'s':''}</div>
-                    <div style={{...S.badge, background:'#EDE9FE', color:'#6D28D9'}}>+100 pts</div>
+                    {d.status === 'verified'
+                      ? <div style={{...S.badge, background:'#DCFCE7', color:'#166534'}}>✓ Verified · +100 pts</div>
+                      : d.status === 'rejected'
+                        ? <div style={{...S.badge, background:'#FEE2E2', color:'#991B1B'}}>✕ Rejected</div>
+                        : <div style={{...S.badge, background:'#FEF3C7', color:'#92400E'}}>⏳ Pending confirmation</div>}
                   </div>
                 </div>
               ))
