@@ -1,7 +1,8 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
+  CreateDateColumn, UpdateDateColumn, OneToMany,
 } from 'typeorm';
+import { HospitalInventory } from './hospital-inventory.entity';
 
 @Entity('hospitals')
 export class Hospital {
@@ -34,6 +35,9 @@ export class Hospital {
 
   @Column({ default: false })
   is_verified: boolean;
+
+  @OneToMany(() => HospitalInventory, (inv) => inv.hospital, { cascade: true, eager: true })
+  inventory: HospitalInventory[];
 
   @Column({ type: 'text', nullable: true })
   admin_notes: string;

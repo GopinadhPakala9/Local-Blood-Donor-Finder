@@ -18,6 +18,7 @@ import { User } from './database/entities/user.entity';
 import { BloodRequest } from './database/entities/blood-request.entity';
 import { Donation } from './database/entities/donation.entity';
 import { Hospital } from './database/entities/hospital.entity';
+import { HospitalInventory } from './database/entities/hospital-inventory.entity';
 import { BloodBank } from './database/entities/blood-bank.entity';
 import { BloodBankInventory } from './database/entities/blood-bank-inventory.entity';
 import { Reward } from './database/entities/reward.entity';
@@ -38,7 +39,7 @@ import { Notification } from './database/entities/notification.entity';
         database: configService.get('database.name'),
         username: configService.get('database.user'),
         password: configService.get('database.password'),
-        entities: [User, BloodRequest, Donation, Hospital, BloodBank, BloodBankInventory, Reward, Notification],
+        entities: [User, BloodRequest, Donation, Hospital, HospitalInventory, BloodBank, BloodBankInventory, Reward, Notification],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: configService.get('env') === 'development',
         logging: configService.get('env') === 'development',

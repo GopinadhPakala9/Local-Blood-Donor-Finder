@@ -10,6 +10,36 @@ const hover = {
 }
 
 function HospitalCard({ h }) {
+  const admin = isAdmin()
+  const [inventory, setInventory] = useState(h.inventory || [])
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const unitsFor = g => inventory.find(i => i.blood_group === g)?.available_units || 0
+  const totalUnits = inventory.reduce((s, i) => s + (i.available_units || 0), 0)
+
+  const startEdit = () => {
+    setDraft(Object.fromEntries(GROUPS.map(g => [g, String(unitsFor(g))])))
+    setEditing(true)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const next = GROUPS.map(g => ({ blood_group: g, available_units: Math.max(0, parseInt(draft[g], 10) || 0) }))
+      for (const { blood_group, available_units } of next) {
+        if (available_units !== unitsFor(blood_group)) {
+          await hospitalsApi.updateInventory(h.id, blood_group, available_units)
+        }
+      }
+      setInventory(next)
+      setEditing(false)
+    } catch (e) {
+      alert(e?.error?.message || e?.message || 'Failed to update stock (are you an admin?).')
+    } finally { setSaving(false) }
+  }
+
   return (
     <div style={S.card} className="fade-in" {...hover}>
       <div style={S.cardTop}>
@@ -22,6 +52,37 @@ function HospitalCard({ h }) {
         </div>
       </div>
       {h.license_number && <div style={S.meta}><span style={S.chip}>🪪 {h.license_number}</span></div>}
+
+      <div>
+        <div style={S.invLabel}>Blood availability {totalUnits > 0 ? `· ${totalUnits} units` : ''}</div>
+        <div style={S.invGrid}>
+          {GROUPS.map(g => {
+            const units = unitsFor(g)
+            return (
+              <div key={g} style={{...S.invCell, ...(units > 0 ? S.invYes : S.invNo)}}>
+                <span style={S.invBg}>{g}</span>
+                {editing
+                  ? <input style={S.invEditInput} type="number" min="0" value={draft[g]}
+                      onChange={e => setDraft(d => ({ ...d, [g]: e.target.value }))} />
+                  : <span style={S.invUnits}>{units}</span>}
+              </div>
+            )
+          })}
+        </div>
+        {admin && (
+          <div style={S.adminBar}>
+            {editing ? (
+              <>
+                <button style={S.saveStockBtn} disabled={saving} onClick={save}>{saving ? 'Saving…' : '✓ Save stock'}</button>
+                <button style={S.cancelStockBtn} disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
+              </>
+            ) : (
+              <button style={S.editStockBtn} onClick={startEdit}>✏️ Edit stock</button>
+            )}
+          </div>
+        )}
+      </div>
+
       {h.phone && (
         <div style={S.actions}>
           <button style={S.callBtn} onClick={() => { window.location.href = `tel:${h.phone}` }}>📞 Call Hospital</button>

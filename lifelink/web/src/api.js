@@ -44,6 +44,8 @@ export const hospitals = {
   // key entirely when blank, because the API rejects unknown/empty extras.
   verify:  (id, admin_notes) =>
     api.put(`/hospitals/${id}/verify`, admin_notes ? { admin_notes } : {}),
+  updateInventory: (id, blood_group, available_units) =>       // admin only
+    api.put(`/hospitals/${id}/inventory`, { blood_group, available_units }),
 }
 
 export const bloodBanks = {
