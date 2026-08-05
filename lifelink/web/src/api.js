@@ -40,6 +40,10 @@ export const hospitals = {
   list:    (params) => api.get('/hospitals', { params }),
   getById: (id)     => api.get(`/hospitals/${id}`),
   create:  (data)   => api.post('/hospitals', data),          // admin only
+  // admin only — flips is_verified to true. admin_notes is optional; omit the
+  // key entirely when blank, because the API rejects unknown/empty extras.
+  verify:  (id, admin_notes) =>
+    api.put(`/hospitals/${id}/verify`, admin_notes ? { admin_notes } : {}),
 }
 
 export const bloodBanks = {
@@ -54,6 +58,7 @@ export const bloodBanks = {
 export const admin = {
   stats: ()        => api.get('/admin/stats'),
   users: (params)  => api.get('/admin/users', { params }),
+  pendingHospitals: () => api.get('/admin/hospitals'),        // unverified only
 }
 
 export const requests = {

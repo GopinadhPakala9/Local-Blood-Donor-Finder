@@ -18,6 +18,13 @@ const mockRepository = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  // verifyOtp() and loginWithPassword() read the `select: false` password
+  // column through a query builder, so the mock has to be chainable.
+  createQueryBuilder: jest.fn(() => ({
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(mockUser),
+  })),
 };
 
 const mockJwtService = {

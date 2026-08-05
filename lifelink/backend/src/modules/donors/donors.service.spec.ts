@@ -45,6 +45,7 @@ describe('DonorsService', () => {
       mockRepository.findOne.mockResolvedValue({ ...mockDonor, role: UserRole.DONOR });
 
       const result = await service.register('uuid-donor-1', {
+        name: 'Jane Doe',
         blood_group: BloodGroup.O_POS,
         gender: Gender.FEMALE,
         dob: '1995-03-15',
@@ -62,12 +63,14 @@ describe('DonorsService', () => {
 
   describe('search', () => {
     it('should return donors with distance string and no lat/lng', async () => {
+      // search() issues the COUNT query first, then the data query — the
+      // mocked results must arrive in that same order.
       mockRepository.query
+        .mockResolvedValueOnce([{ count: '1' }])
         .mockResolvedValueOnce([
           { id: 'uuid-1', name: 'Jane', blood_group: 'O+', city: 'Hyderabad',
             distance_km: '1.2', total_donations: '3', is_available: true },
-        ])
-        .mockResolvedValueOnce([{ count: '1' }]);
+        ]);
 
       const result = await service.search({
         blood_group: BloodGroup.O_POS,

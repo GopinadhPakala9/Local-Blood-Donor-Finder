@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { hospitals as hospitalsApi, bloodBanks as bloodBanksApi } from '../api'
+import { hospitals as hospitalsApi, bloodBanks as bloodBanksApi, admin as adminApi } from '../api'
 
 const GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
 
@@ -68,12 +68,45 @@ export default function AdminPanel() {
     } finally { setLoading(false) }
   }
 
+  // ── Verify tab ──────────────────────────────────────────────────────────────
+  // GET /admin/hospitals returns only the unverified ones, which is exactly the
+  // queue we want. Verifying removes the row from the list in place.
+  const [pending, setPending] = useState([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const [notes, setNotes] = useState({})       // { [hospitalId]: 'note text' }
+  const [verifying, setVerifying] = useState(null)
+
+  const loadPending = async () => {
+    setPendingLoading(true)
+    try {
+      const res = await adminApi.pendingHospitals()
+      setPending(res?.data || [])
+    } catch (err) {
+      setPending([])
+      setMsg({ type: 'err', text: err?.error?.message || err?.message || 'Could not load pending hospitals (are you an admin?).' })
+    } finally { setPendingLoading(false) }
+  }
+
+  useEffect(() => { if (tab === 'verify') loadPending() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const verifyHospital = async hos => {
+    setMsg(null); setVerifying(hos.id)
+    try {
+      await hospitalsApi.verify(hos.id, (notes[hos.id] || '').trim() || undefined)
+      setPending(list => list.filter(x => x.id !== hos.id))
+      setNotes(n => { const next = { ...n }; delete next[hos.id]; return next })
+      setMsg({ type: 'ok', text: `✓ "${hos.name}" is now verified.` })
+    } catch (err) {
+      setMsg({ type: 'err', text: err?.error?.message || err?.message || 'Failed to verify hospital.' })
+    } finally { setVerifying(null) }
+  }
+
   return (
     <div style={S.page}>
       <div style={S.header}>
         <div>
           <h1 style={S.h1}>⚙️ Admin Panel</h1>
-          <p style={S.sub}>Add and manage hospitals and blood banks</p>
+          <p style={S.sub}>Add hospitals and blood banks, and verify the ones awaiting approval</p>
         </div>
         <button style={S.linkBtn} onClick={() => nav('/hospitals')}>View directory →</button>
       </div>
@@ -81,11 +114,14 @@ export default function AdminPanel() {
       <div style={S.tabs}>
         <button style={{ ...S.tab, ...(tab === 'hospital' ? S.tabActive : {}) }} onClick={() => { setTab('hospital'); setMsg(null) }}>🏥 Add Hospital</button>
         <button style={{ ...S.tab, ...(tab === 'bank' ? S.tabActive : {}) }} onClick={() => { setTab('bank'); setMsg(null) }}>🩸 Add Blood Bank</button>
+        <button style={{ ...S.tab, ...(tab === 'verify' ? S.tabActive : {}) }} onClick={() => { setTab('verify'); setMsg(null) }}>
+          ✅ Verify Hospitals{pending.length > 0 && tab !== 'verify' ? ` (${pending.length})` : ''}
+        </button>
       </div>
 
       {msg && <div style={{ ...S.banner, ...(msg.type === 'ok' ? S.bannerOk : S.bannerErr) }}>{msg.text}</div>}
 
-      {tab === 'hospital' ? (
+      {tab === 'hospital' && (
         <form style={S.card} onSubmit={submitHospital}>
           <div style={S.grid2}>
             <Field label="Name *"><input style={S.input} value={h.name} onChange={e => setHF('name', e.target.value)} placeholder="Apollo Hospitals" /></Field>
@@ -96,9 +132,11 @@ export default function AdminPanel() {
             <Field label="State *"><input style={S.input} value={h.state} onChange={e => setHF('state', e.target.value)} placeholder="Telangana" /></Field>
           </div>
           <button style={S.submit} disabled={loading}>{loading ? 'Saving…' : 'Add Hospital'}</button>
-          <p style={S.note}>New hospitals start as unverified; verify them later from the directory/admin tools.</p>
+          <p style={S.note}>New hospitals start as unverified — approve them from the <strong>✅ Verify Hospitals</strong> tab.</p>
         </form>
-      ) : (
+      )}
+
+      {tab === 'bank' && (
         <form style={S.card} onSubmit={submitBank}>
           <div style={S.grid2}>
             <Field label="Name *"><input style={S.input} value={b.name} onChange={e => setBF('name', e.target.value)} placeholder="Red Cross Blood Bank" /></Field>
@@ -119,6 +157,65 @@ export default function AdminPanel() {
 
           <button style={S.submit} disabled={loading}>{loading ? 'Saving…' : 'Add Blood Bank'}</button>
         </form>
+      )}
+
+      {tab === 'verify' && (
+        <div style={S.card}>
+          <div style={S.verifyHead}>
+            <div>
+              <h3 style={S.verifyTitle}>Hospitals awaiting verification</h3>
+              <p style={S.note}>
+                Verifying replaces the ⏳ Unverified chip with ✓ Verified in the public directory.
+                This cannot be undone from the UI.
+              </p>
+            </div>
+            <button type="button" style={S.linkBtn} onClick={loadPending} disabled={pendingLoading}>
+              {pendingLoading ? 'Loading…' : '↻ Refresh'}
+            </button>
+          </div>
+
+          {pendingLoading ? (
+            <p style={S.dim}>Loading pending hospitals…</p>
+          ) : pending.length === 0 ? (
+            <div style={S.empty}>
+              <div style={{ fontSize: 44 }}>✅</div>
+              <p style={{ color: 'var(--text-2)', fontWeight: 600, marginTop: 8 }}>Nothing pending</p>
+              <p style={S.note}>Every registered hospital has been verified.</p>
+            </div>
+          ) : (
+            <>
+              <div style={S.pendingCount}>
+                {pending.length} hospital{pending.length !== 1 ? 's' : ''} awaiting verification
+              </div>
+              {pending.map(hos => (
+                <div key={hos.id} style={S.row}>
+                  <div style={{ flex: 1, minWidth: 190 }}>
+                    <div style={S.rowName}>{hos.name}</div>
+                    <div style={S.rowMeta}>
+                      📍 {hos.city || 'Unknown'}{hos.state ? `, ${hos.state}` : ''}
+                      {hos.phone ? ` · 📞 ${hos.phone}` : ''}
+                    </div>
+                    {hos.license_number && <div style={S.rowMeta}>🪪 {hos.license_number}</div>}
+                  </div>
+                  <input
+                    style={S.noteInput}
+                    placeholder="Verification note (optional)"
+                    value={notes[hos.id] || ''}
+                    onChange={e => setNotes(n => ({ ...n, [hos.id]: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    style={{ ...S.verifyBtn, ...(verifying === hos.id ? S.verifyBtnBusy : {}) }}
+                    disabled={verifying === hos.id}
+                    onClick={() => verifyHospital(hos)}
+                  >
+                    {verifying === hos.id ? 'Verifying…' : '✓ Verify'}
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   )
@@ -157,4 +254,15 @@ const S = {
   invInput: { width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, textAlign: 'center', outline: 'none', boxSizing: 'border-box' },
   submit: { marginTop: 20, padding: '11px 28px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(192,57,43,.3)' },
   note: { fontSize: 12, color: 'var(--text-3)', marginTop: 10 },
+  verifyHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
+  verifyTitle: { fontSize: 16, fontWeight: 700, color: 'var(--text)' },
+  pendingCount: { fontSize: 12, fontWeight: 700, color: 'var(--text-2)', margin: '18px 0 4px' },
+  row: { display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: '1px solid var(--border)', flexWrap: 'wrap' },
+  rowName: { fontSize: 14, fontWeight: 700, color: 'var(--text)' },
+  rowMeta: { fontSize: 12, color: 'var(--text-3)', marginTop: 2 },
+  noteInput: { flex: 1, minWidth: 170, padding: '8px 10px', border: '2px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' },
+  verifyBtn: { padding: '9px 18px', background: '#16A34A', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(22,163,74,.3)' },
+  verifyBtnBusy: { background: '#6B7280', cursor: 'default', boxShadow: 'none' },
+  dim: { color: 'var(--text-3)', fontSize: 14, padding: '20px 0' },
+  empty: { textAlign: 'center', padding: '32px 0' },
 }
