@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { hospitals as hospitalsApi, bloodBanks as bloodBanksApi } from '../api'
+import { isAdmin } from '../auth'
 
 const GROUPS = ['A+','A-','B+','B-','O+','O-','AB+','AB-']
 
@@ -31,8 +32,36 @@ function HospitalCard({ h }) {
 }
 
 function BankCard({ b }) {
-  const inv = b.inventory || []
-  const totalUnits = inv.reduce((s, i) => s + (i.available_units || 0), 0)
+  const admin = isAdmin()
+  const [inventory, setInventory] = useState(b.inventory || [])
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const unitsFor = g => inventory.find(i => i.blood_group === g)?.available_units || 0
+  const totalUnits = inventory.reduce((s, i) => s + (i.available_units || 0), 0)
+
+  const startEdit = () => {
+    setDraft(Object.fromEntries(GROUPS.map(g => [g, String(unitsFor(g))])))
+    setEditing(true)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const next = GROUPS.map(g => ({ blood_group: g, available_units: Math.max(0, parseInt(draft[g], 10) || 0) }))
+      for (const { blood_group, available_units } of next) {
+        if (available_units !== unitsFor(blood_group)) {
+          await bloodBanksApi.updateInventory(b.id, blood_group, available_units)
+        }
+      }
+      setInventory(next)
+      setEditing(false)
+    } catch (e) {
+      alert(e?.error?.message || e?.message || 'Failed to update stock (are you an admin?).')
+    } finally { setSaving(false) }
+  }
+
   return (
     <div style={S.card} className="fade-in" {...hover}>
       <div style={S.cardTop}>
@@ -48,15 +77,30 @@ function BankCard({ b }) {
         <div style={S.invLabel}>Blood availability {totalUnits > 0 ? `· ${totalUnits} units` : ''}</div>
         <div style={S.invGrid}>
           {GROUPS.map(g => {
-            const units = inv.find(i => i.blood_group === g)?.available_units || 0
+            const units = unitsFor(g)
             return (
               <div key={g} style={{...S.invCell, ...(units > 0 ? S.invYes : S.invNo)}}>
                 <span style={S.invBg}>{g}</span>
-                <span style={S.invUnits}>{units}</span>
+                {editing
+                  ? <input style={S.invEditInput} type="number" min="0" value={draft[g]}
+                      onChange={e => setDraft(d => ({ ...d, [g]: e.target.value }))} />
+                  : <span style={S.invUnits}>{units}</span>}
               </div>
             )
           })}
         </div>
+        {admin && (
+          <div style={S.adminBar}>
+            {editing ? (
+              <>
+                <button style={S.saveStockBtn} disabled={saving} onClick={save}>{saving ? 'Saving…' : '✓ Save stock'}</button>
+                <button style={S.cancelStockBtn} disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
+              </>
+            ) : (
+              <button style={S.editStockBtn} onClick={startEdit}>✏️ Edit stock</button>
+            )}
+          </div>
+        )}
       </div>
 
       {b.phone && (
@@ -183,6 +227,11 @@ const S = {
   invNo: { background:'#F9FAFB', borderColor:'var(--border)', color:'#9CA3AF' },
   invBg: { fontSize:12, fontWeight:800 },
   invUnits: { fontSize:11, fontWeight:600 },
+  invEditInput: { width:'100%', marginTop:3, padding:'2px 0', border:'1px solid #9CA3AF', borderRadius:5, fontSize:12, textAlign:'center', outline:'none', boxSizing:'border-box' },
+  adminBar: { display:'flex', gap:8, marginTop:10 },
+  editStockBtn: { padding:'6px 14px', background:'#EDE9FE', color:'#6D28D9', border:'2px solid #DDD6FE', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer' },
+  saveStockBtn: { padding:'6px 14px', background:'#16A34A', color:'white', border:'none', borderRadius:8, fontWeight:700, fontSize:12, cursor:'pointer' },
+  cancelStockBtn: { padding:'6px 14px', background:'white', color:'var(--text-2)', border:'2px solid var(--border)', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer' },
   actions: { display:'flex', gap:8 },
   callBtn: { flex:1, padding:'9px', background:'var(--red-pale)', color:'var(--red)', border:'2px solid #FECACA', borderRadius:8, fontWeight:600, fontSize:13, cursor:'pointer' },
   loadWrap: { display:'flex', flexDirection:'column', alignItems:'center', padding:'60px 0' },
